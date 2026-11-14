@@ -263,6 +263,22 @@ func isoDay(_ d: Date) -> String {
     return f.string(from: d)
 }
 
+/// One weather code that sums up a day.
+/// Open-Meteo's daily code is the *worst* hour (one drizzly hour makes the whole day "rain"),
+/// so use the most common daytime weather instead, and only call it wet when rain is likely:
+/// at least a 50% chance, or 1 mm or more (past days have no chance figure, just the amount).
+func typicalWeather(worst: Int, daytime: [Int], rainMM: Double, rainChance: Double?) -> Int {
+    let wetCode = 51   // drizzle, rain, snow and storms are all 51 and up
+    let rainLikely = (rainChance ?? 0) >= 50 || rainMM >= 1
+    if worst >= wetCode && rainLikely { return worst }
+    let dry = daytime.filter { $0 < wetCode }
+    guard !dry.isEmpty else { return rainLikely ? worst : 3 }   // no dry daytime hours: call it overcast
+    var counts: [Int: Int] = [:]
+    for c in dry { counts[c, default: 0] += 1 }
+    // Most common daytime weather; on a tie, the cloudier of the two.
+    return counts.max { a, b in a.value == b.value ? a.key < b.key : a.value < b.value }!.key
+}
+
 func fetchWeather(_ s: Settings, completion: @escaping ([String: Any]?) -> Void) {
     let now = Date()
     let m = monthInfo(now)
@@ -273,7 +289,8 @@ func fetchWeather(_ s: Settings, completion: @escaping ([String: Any]?) -> Void)
     c.queryItems = [
         .init(name: "latitude", value: String(s.latitude)),
         .init(name: "longitude", value: String(s.longitude)),
-        .init(name: "daily", value: "weather_code,temperature_2m_max,temperature_2m_min,wind_speed_10m_max"),
+        .init(name: "daily", value: "weather_code,temperature_2m_max,temperature_2m_min,wind_speed_10m_max,precipitation_sum,precipitation_probability_max"),
+        .init(name: "hourly", value: "weather_code"),
         .init(name: "current", value: "temperature_2m,weather_code,wind_speed_10m"),
         .init(name: "timezone", value: "auto"),
         .init(name: "start_date", value: isoDay(m.first)),
@@ -287,11 +304,27 @@ func fetchWeather(_ s: Settings, completion: @escaping ([String: Any]?) -> Void)
         let hi = daily["temperature_2m_max"] as? [Any] ?? []
         let lo = daily["temperature_2m_min"] as? [Any] ?? []
         let wind = daily["wind_speed_10m_max"] as? [Any] ?? []
+        let rainSum = daily["precipitation_sum"] as? [Any] ?? []
+        let rainChance = daily["precipitation_probability_max"] as? [Any] ?? []
+
+        // Daytime (7 AM–7 PM) hourly weather codes for each day.
+        var daytime: [String: [Int]] = [:]
+        if let hourly = j["hourly"] as? [String: Any],
+           let hTimes = hourly["time"] as? [String], let hCodes = hourly["weather_code"] as? [Any] {
+            for (i, t) in hTimes.enumerated() where i < hCodes.count {
+                guard let code = hCodes[i] as? Double, let hour = Int(t.dropFirst(11).prefix(2)), (7..<19).contains(hour) else { continue }
+                daytime[String(t.prefix(10)), default: []].append(Int(code))
+            }
+        }
+
         var days: [String: Any] = [:]
         for (i, t) in times.enumerated() {
-            guard i < codes.count, let code = codes[i] as? Double,
+            guard i < codes.count, let worst = codes[i] as? Double,
                   let h = hi[i] as? Double, let l = lo[i] as? Double else { continue }
-            days[t] = [code, h, l, (i < wind.count ? wind[i] as? Double : nil) ?? 0]   // keyed "yyyy-MM-dd"
+            let mm = (i < rainSum.count ? rainSum[i] as? Double : nil) ?? 0
+            let chance = i < rainChance.count ? rainChance[i] as? Double : nil
+            let code = typicalWeather(worst: Int(worst), daytime: daytime[t] ?? [], rainMM: mm, rainChance: chance)
+            days[t] = [Double(code), h, l, (i < wind.count ? wind[i] as? Double : nil) ?? 0]   // keyed "yyyy-MM-dd"
         }
         var result: [String: Any] = ["days": days]
         if let cur = j["current"] as? [String: Any], let temp = cur["temperature_2m"] as? Double,
