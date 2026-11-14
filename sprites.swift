@@ -1,8 +1,8 @@
 import Cocoa
 import WebKit
 
-// Shared by Pokémon Widget (main.swift) and Pokémon Roam (roam/main.swift):
-// where the sprites live, reading the sprite sheets and evolution data, and the pw:// scheme.
+// Where the sprites live, reading the sprite sheets and evolution data, and the pw:// scheme.
+// (Pokémon Roam, github.com/Maham-Anwaar/pokemon-roam, has its own copy and can use these sprites.)
 
 // MARK: - Paths
 

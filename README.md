@@ -1,4 +1,4 @@
-<img src="icon.svg" width="128" alt="Pokémon Widget app icon"> <img src="roam/icon.svg" width="128" alt="Pokémon Roam app icon">
+<img src="icon.svg" width="128" alt="Pokémon Widget app icon">
 
 # Pokémon Desktop Widget
 
@@ -43,26 +43,9 @@ A Pokémon that finds a snack may also carry it over to a friend and share it.
 - **Shinies.** Every Pokémon that arrives has a 1-in-64 chance of being shiny (configurable). Visitors rotate every few minutes, shinies arrive with sparkles, and the menu keeps a log of every shiny you've spotted.
 - **New faces.** Click the Poké Ball to shuffle in a new group.
 
-## Pokémon Roam: let them loose on your whole screen
+## Want them all over your desktop?
 
-A second, separate app in this repo, `roam/`. It fills your desktop with 10–20 Pokémon (you choose how many). They live on the desktop itself, behind all your windows, so they're there whenever you look at it and never in the way of your work:
-
-- **Walkers** stroll along the bottom of the screen, just above the Dock. They hop, take running leaps, curl up for naps (more at night), spin, sit and look around, and stop for a happy moment when they bump into each other.
-- **Flyers** (Pidgey, Zubat, Butterfree, Gastly, Swablu, Beautifly and friends) glide across the whole screen at different heights. Now and then they swoop down to land, wander about, and take off again.
-- **Your cursor.** The Pokémon never get in the way of your clicks, so they react to your cursor instead: walkers notice it, hop and tell you their name; flyers veer away.
-- **Comings and goings.** Pokémon wander in from the screen edges, leave now and then, and new ones arrive. Shinies sparkle.
-
-Every display gets its own share. Control it from the **paw print** in the menu bar: New faces, Pause, How many (5–30), Size, Open at login.
-
-It uses the same sprites as the widget, so run `./fetch_sprites.sh` first, then:
-
-```bash
-./roam/build.sh
-```
-
-```bash
-open /Applications/"Pokemon Roam.app"
-```
+**[Pokémon Roam](https://github.com/Maham-Anwaar/pokemon-roam)** is a sibling app: 10–20 Pokémon walking, hopping, napping and flying across your whole desktop, behind your windows. It can use this widget's sprites, so there's nothing extra to download.
 
 ## Also on the widget
 
@@ -183,15 +166,14 @@ Your shiny log is saved to `~/Documents/Pokemon Widget/shinies.json`.
 | `widget.html` | The widget UI (all four sizes) and the Pokémon: their animations, behaviour and everything you can do with them |
 | `build.sh` | Compiles, signs and installs the app |
 | `fetch_sprites.sh` | Downloads the sprites |
-| `sprites.swift` | Shared by both apps: sprite folder, sprite-sheet and evolution data, the `pw://` scheme |
-| `roam/` | Pokémon Roam: `main.swift` (a click-through desktop window per display, menu bar), `roam.html` (the Pokémon), `icon.svg` / `AppIcon.icns`, `build.sh` |
+| `sprites.swift` | The sprite folder, sprite-sheet and evolution data, the `pw://` scheme |
 
 ## Uninstall
 
 Quit from **◎ → Quit**, then:
 
 ```bash
-rm -rf /Applications/"Pokemon Widget.app" /Applications/"Pokemon Roam.app" ~/Documents/"Pokemon Widget"
+rm -rf /Applications/"Pokemon Widget.app" ~/Documents/"Pokemon Widget"
 ```
 
 ## Troubleshooting
