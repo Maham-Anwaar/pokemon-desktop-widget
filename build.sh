@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Builds "Pokemon Widget.app" and installs it to ~/Applications.
+# Builds "Pokemon Widget.app" and installs it to /Applications.
 # Usage: ./build.sh            (signs with your Apple Development certificate if present)
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -39,7 +39,7 @@ codesign --force --timestamp=none --sign "${ID:--}" "$APP"
 codesign --verify --strict "$APP"
 
 pkill -x PokemonWidget 2>/dev/null || true
-mkdir -p ~/Applications
-rm -rf ~/Applications/"Pokemon Widget.app"
-cp -R "$APP" ~/Applications/
-echo "Installed ~/Applications/Pokemon Widget.app (signed with ${ID:-ad-hoc})"
+rm -rf ~/Applications/"Pokemon Widget.app"   # older builds installed here
+rm -rf /Applications/"Pokemon Widget.app"
+cp -R "$APP" /Applications/
+echo "Installed /Applications/Pokemon Widget.app"

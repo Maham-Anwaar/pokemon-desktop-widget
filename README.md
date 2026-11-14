@@ -60,12 +60,12 @@ It's safe to run again: it skips files you already have.
 ./build.sh
 ```
 
-This compiles the app and installs it to `~/Applications/Pokemon Widget.app`. If you have an Apple Development certificate in your keychain, it's used for signing (macOS may ask once for your keychain password: choose **Always Allow**); otherwise the app is signed locally.
+This compiles the app and installs it to `/Applications/Pokemon Widget.app`. If you have an Apple Development certificate in your keychain, it's used for signing (macOS may ask once for your keychain password: choose **Always Allow**); otherwise the app is signed locally.
 
 ### 4. Open it
 
 ```bash
-open ~/Applications/"Pokemon Widget.app"
+open /Applications/"Pokemon Widget.app"
 ```
 
 The first time, macOS asks whether the app can access your **Documents** folder: click **Allow** (that's where the sprites and settings live).
@@ -135,7 +135,7 @@ Your shiny log is saved to `~/Documents/Pokemon Widget/shinies.json`.
 Quit from **◎ → Quit**, then:
 
 ```bash
-rm -rf ~/Applications/"Pokemon Widget.app" ~/Documents/"Pokemon Widget"
+rm -rf /Applications/"Pokemon Widget.app" ~/Documents/"Pokemon Widget"
 ```
 
 ## Troubleshooting
