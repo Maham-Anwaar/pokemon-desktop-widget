@@ -1,0 +1,6 @@
+build/
+.DS_Store
+# Personal data and downloaded art never go in the repo
+config.json
+shinies.json
+sprites/

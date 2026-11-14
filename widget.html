@@ -1,0 +1,688 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pokémon desktop widget</title>
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; background: transparent; overflow: hidden; -webkit-user-select: none; user-select: none; cursor: default; }
+  body { font-family: Inter, system-ui, sans-serif; }
+  .px { font-family: Silkscreen, ui-monospace, monospace; }
+  img { image-rendering: pixelated; -webkit-user-drag: none; }
+  .card { box-sizing: border-box; background: #0E1319; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06); display: none; flex-direction: column; overflow: hidden; }
+  body[data-size="large"]  #lg { display: flex; }
+  body[data-size="medium"] #md { display: flex; }
+  body[data-size="small"]  #sm { display: flex; }
+  body[data-size="mini"]   #mi { display: flex; }
+  .panel { background: #141B24; border-radius: 14px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.05); box-sizing: border-box; }
+  .label { font-family: Silkscreen, ui-monospace, monospace; font-size: 8px; letter-spacing: 1.2px; color: #8B97A8; }
+  .hi { color: #F2F6FB; font-weight: 800; }
+  .daycell { appearance: none; -webkit-appearance: none; border: 0; margin: 0; font: inherit; cursor: pointer; text-align: left; box-sizing: border-box; padding: 3px 4px; border-radius: 8px; display: flex; flex-direction: column; align-items: stretch; gap: 1px; overflow: hidden; }
+  .daycell:hover { filter: brightness(1.4); }
+  #route { position: relative; flex: none; box-sizing: border-box; background: #121A16; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.05); overflow: hidden; }
+  .ball { appearance: none; -webkit-appearance: none; border: 0; margin: 0; padding: 0; cursor: pointer; position: absolute; left: 4px; top: 50%; margin-top: -22px; width: 44px; height: 44px; border-radius: 12px; background: rgba(255,255,255,0.05); display: flex; align-items: center; justify-content: center; z-index: 5; }
+  .ball:hover { filter: brightness(1.25); }
+  .ball:active { transform: scale(0.94); }
+  .walker { position: absolute; left: 0; image-rendering: pixelated; background-repeat: no-repeat; will-change: transform; transition: opacity .7s ease; }
+  @keyframes snooze { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+  .snooze { animation: snooze 3.4s ease-in-out infinite; }
+  .sparkle { position: absolute; width: 7px; height: 7px; pointer-events: none; z-index: 4; animation: twinkle .9s ease-out forwards; }
+  .sparkle::before, .sparkle::after { content: ''; position: absolute; left: 3px; top: 0; width: 1px; height: 7px; background: currentColor; border-radius: 1px; }
+  .sparkle::after { transform: rotate(90deg); }
+  @keyframes twinkle { 0% { transform: scale(0) rotate(0); opacity: 1; } 55% { transform: scale(1) rotate(45deg); opacity: 1; } 100% { transform: scale(.3) rotate(90deg); opacity: 0; } }
+  .shinyTag { position: absolute; top: 5px; font-family: Silkscreen, ui-monospace, monospace; font-size: 8px; letter-spacing: 1px; z-index: 4; pointer-events: none; transition: opacity .8s ease; white-space: nowrap; }
+</style>
+</head>
+<body data-size="large">
+
+<!-- ===================== LARGE 560×470 (the original design) ===================== -->
+<div class="card" id="lg" style="width: 560px; height: 470px; padding: 14px; border-radius: 22px; gap: 10px">
+
+  <div style="height: 76px; flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 4px">
+    <div style="display: flex; flex-direction: column; gap: 3px; min-width: 0">
+      <span class="px" data-accent="color" style="font-size: 8px; letter-spacing: 1.4px">TRAINER CARD</span>
+      <span data-k="name" style="font-size: 21px; font-weight: 800; letter-spacing: -0.3px; color: #F2F6FB; line-height: 1.1">TRAINER</span>
+      <span data-k="dateLine" style="font-size: 11px; font-weight: 500; color: #9AA7B8">&nbsp;</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 10px; flex: none">
+      <img data-k="wxSprite" alt="" style="width: 54px; height: 54px; object-fit: contain">
+      <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 1px">
+        <span data-k="wxTemp" style="font-size: 30px; font-weight: 800; letter-spacing: -1px; color: #F2F6FB; line-height: 1">--°</span>
+        <span data-k="wxName" style="font-size: 11px; font-weight: 600; color: #E6ECF4">Loading</span>
+        <span data-k="wxHL" style="font-size: 10px; font-weight: 500; color: #9AA7B8">&nbsp;</span>
+      </div>
+    </div>
+  </div>
+
+  <div style="flex: 1 1 auto; min-height: 0; display: flex; gap: 10px">
+    <div class="panel" style="width: 332px; flex: none; padding: 10px; display: flex; flex-direction: column; gap: 6px">
+      <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 8px">
+        <span class="px" style="font-size: 9px; letter-spacing: 1.2px; color: #E6ECF4" id="monthLabel">&nbsp;</span>
+        <span style="font-size: 9px; font-weight: 600; color: #9AA7B8; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis" id="detail">bar = commits that day</span>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px" id="weekdays"></div>
+      <div style="display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px" id="days"></div>
+    </div>
+
+    <div style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 10px">
+      <div class="panel" style="flex: 1 1 0; min-height: 0; padding: 10px 12px; display: flex; flex-direction: column; justify-content: space-between">
+        <span class="label">COMMIT STREAK</span>
+        <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 6px">
+          <span style="display: flex; align-items: baseline; gap: 4px">
+            <span data-k="streak" data-accent="color" style="font-size: 34px; font-weight: 800; letter-spacing: -1.5px; line-height: 1">0</span>
+            <span data-k="streakUnit" style="font-size: 10px; font-weight: 600; color: #9AA7B8">days</span>
+          </span>
+          <img data-k="streakSprite" alt="" style="width: 52px; height: 52px; object-fit: contain; margin-bottom: -4px">
+        </div>
+        <div style="display: flex; align-items: flex-end; gap: 3px; height: 22px" id="week"></div>
+        <span data-k="evoNote" style="font-size: 9px; font-weight: 500; color: #9AA7B8">&nbsp;</span>
+      </div>
+
+      <div class="panel" style="flex: 1 1 0; min-height: 0; padding: 10px 12px; display: flex; flex-direction: column; justify-content: space-between">
+        <span class="label">SYSTEM HP</span>
+        <div style="display: flex; align-items: center; gap: 6px">
+          <div style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px">
+            <span style="display: flex; align-items: baseline; justify-content: space-between; gap: 4px">
+              <span style="font-size: 11px; font-weight: 700; color: #F2F6FB; white-space: nowrap; overflow: hidden; text-overflow: ellipsis" id="model">MAC</span>
+              <span style="font-size: 9px; font-weight: 600; color: #9AA7B8; flex: none" id="level">Lv.1</span>
+            </span>
+            <span style="display: flex; align-items: center; gap: 4px">
+              <span class="px" data-accent="color" style="font-size: 7px; flex: none">HP</span>
+              <span style="flex: 1 1 auto; min-width: 0; display: block; height: 8px; border-radius: 5px; background: rgba(255,255,255,0.08); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.07); overflow: hidden">
+                <span style="display: block; height: 8px; border-radius: 5px; width: 0; transition: width .6s ease, background-color .6s ease" id="hpBar"></span>
+              </span>
+            </span>
+            <span style="font-size: 9px; font-weight: 600; color: #9AA7B8" id="hpNote">&nbsp;</span>
+          </div>
+          <img id="vitalSprite" alt="" style="width: 38px; height: 38px; object-fit: contain; flex: none">
+        </div>
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 4px">
+          <span style="font-size: 9px; font-weight: 600; color: #8B97A8">CPU <span style="color: #E6ECF4" id="cpu">--</span></span>
+          <span style="font-size: 9px; font-weight: 600; color: #8B97A8">DISK <span style="color: #E6ECF4" id="disk">--</span></span>
+          <span style="font-size: 9px; font-weight: 600; color: #8B97A8">BAT <span style="color: #E6ECF4" id="bat">--</span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="routeSlot"></div>
+</div>
+
+<!-- ===================== MEDIUM 748×220: today, 7-day forecast, streak + HP, open route ===================== -->
+<div class="card" id="md" style="width: 748px; height: 220px; padding: 18px 18px 14px; border-radius: 22px; gap: 6px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1)">
+  <div style="height: 134px; flex: none; display: flex; gap: 10px">
+
+    <!-- Today -->
+    <div class="panel" style="width: 158px; flex: none; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; justify-content: space-between">
+      <span class="px" data-k="dateShort" data-accent="color" style="font-size: 9px; letter-spacing: 1.4px">&nbsp;</span>
+      <div style="display: flex; align-items: center; gap: 8px">
+        <img data-k="wxSprite" alt="" style="width: 42px; height: 42px; object-fit: contain; flex: none">
+        <span data-k="wxTemp" style="font-size: 32px; font-weight: 800; letter-spacing: -1.5px; color: #F2F6FB; line-height: 1">--°</span>
+      </div>
+      <span data-k="wxLine" style="font-size: 11px; font-weight: 600; color: #9AA7B8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">&nbsp;</span>
+    </div>
+
+    <!-- 7-day forecast, today first -->
+    <div class="panel" style="width: 352px; flex: none; border-radius: 12px; padding: 12px 10px; display: flex; flex-direction: column; gap: 6px">
+      <span class="label" style="font-size: 9px; letter-spacing: 1.8px; padding-left: 2px">7-DAY FORECAST</span>
+      <div id="next7" style="flex: 1 1 auto; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; align-items: stretch"></div>
+    </div>
+
+    <!-- Streak + HP -->
+    <div style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 10px">
+      <div class="panel" style="flex: 1 1 0; border-radius: 12px; padding: 0 8px 0 12px; display: flex; align-items: center; gap: 6px">
+        <span class="label" style="font-size: 7px; letter-spacing: 1.5px">STREAK</span>
+        <span data-k="streak" data-accent="color" style="font-size: 26px; font-weight: 800; letter-spacing: -1px; line-height: 1">0</span>
+        <span data-k="streakUnit" style="font-size: 11px; font-weight: 600; color: #9AA7B8">days</span>
+        <img data-k="streakSprite" alt="" style="width: 40px; height: 40px; object-fit: contain; margin-left: auto">
+      </div>
+      <div class="panel" style="flex: 1 1 0; border-radius: 12px; padding: 0 8px 0 12px; display: flex; align-items: center; gap: 6px">
+        <span class="px" data-accent="color" style="font-size: 9px; letter-spacing: 1px; flex: none">HP</span>
+        <span style="flex: 1 1 auto; min-width: 0; display: block; height: 8px; border-radius: 5px; background: rgba(255,255,255,0.08); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.07); overflow: hidden">
+          <span data-k="hpBar" style="display: block; height: 8px; border-radius: 5px; width: 0; transition: width .6s ease, background-color .6s ease"></span>
+        </span>
+        <span data-k="hpPct" style="font-size: 12px; font-weight: 700; color: #E6ECF4; flex: none">--</span>
+        <img data-k="vitalSprite" alt="" style="width: 34px; height: 34px; object-fit: contain; flex: none">
+      </div>
+    </div>
+  </div>
+  <div class="routeSlot"></div>
+</div>
+
+<!-- ===================== SMALL 170×170: weather, streak, one walker ===================== -->
+<div class="card" id="sm" style="width: 170px; height: 170px; padding: 12px; border-radius: 20px; gap: 6px">
+  <div style="height: 44px; flex: none; display: flex; align-items: center; justify-content: space-between; gap: 4px">
+    <div style="display: flex; flex-direction: column; gap: 1px; min-width: 0">
+      <span data-k="wxTemp" style="font-size: 26px; font-weight: 800; letter-spacing: -1px; color: #F2F6FB; line-height: 1">--°</span>
+      <span data-k="wxName" style="font-size: 10px; font-weight: 600; color: #E6ECF4; white-space: nowrap">Loading</span>
+      <span data-k="wxHL" style="font-size: 9px; font-weight: 500; color: #9AA7B8; white-space: nowrap">&nbsp;</span>
+    </div>
+    <img data-k="wxSprite" alt="" style="width: 44px; height: 44px; object-fit: contain; flex: none">
+  </div>
+  <div class="panel" style="height: 44px; flex: none; border-radius: 10px; padding: 5px 8px; display: flex; align-items: center; justify-content: space-between; gap: 4px">
+    <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0">
+      <span class="label" style="font-size: 7px">STREAK</span>
+      <span style="display: flex; align-items: baseline; gap: 3px">
+        <span data-k="streak" data-accent="color" style="font-size: 20px; font-weight: 800; letter-spacing: -1px; line-height: 1">0</span>
+        <span data-k="streakUnit" style="font-size: 9px; font-weight: 600; color: #9AA7B8">days</span>
+      </span>
+    </div>
+    <img data-k="streakSprite" alt="" style="width: 36px; height: 36px; object-fit: contain; flex: none">
+  </div>
+  <div class="routeSlot"></div>
+</div>
+
+<!-- ===================== MINI 320×64: just the route ===================== -->
+<div class="card" id="mi" style="width: 320px; height: 64px; padding: 0; border-radius: 16px; background: transparent; box-shadow: none">
+  <div class="routeSlot"></div>
+</div>
+
+<!-- The route lives in whichever layout is showing. -->
+<div id="route">
+  <span id="groundLine" style="position: absolute; left: 0; right: 0; height: 1px; background: rgba(255,255,255,0.07)"></span>
+  <svg class="grass" width="12" height="10" viewBox="0 0 12 10" aria-hidden="true" style="position: absolute; left: 150px; opacity: 0.5"><path d="M2 10 L4 2 M6 10 L6 1 M10 10 L8 3" stroke="#4E7F5A" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+  <svg class="grass" width="12" height="10" viewBox="0 0 12 10" aria-hidden="true" style="position: absolute; left: 318px; opacity: 0.5"><path d="M2 10 L4 2 M6 10 L6 1 M10 10 L8 3" stroke="#4E7F5A" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+  <svg class="grass" width="12" height="10" viewBox="0 0 12 10" aria-hidden="true" style="position: absolute; left: 424px; opacity: 0.5"><path d="M2 10 L4 2 M6 10 L6 1 M10 10 L8 3" stroke="#4E7F5A" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+  <svg class="grass" width="12" height="10" viewBox="0 0 12 10" aria-hidden="true" style="position: absolute; left: 96px; opacity: 0.5"><path d="M2 10 L4 2 M6 10 L6 1 M10 10 L8 3" stroke="#4E7F5A" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+
+  <button type="button" class="ball" id="ball" aria-label="Shuffle the Pokémon roaming this route">
+    <svg width="22" height="22" viewBox="0 0 22 22" role="img" aria-label="Poké Ball">
+      <circle cx="11" cy="11" r="9.25" fill="none" stroke="#E6ECF4" stroke-width="1.5"/>
+      <path d="M1.75 11 H8" stroke="#E6ECF4" stroke-width="1.5" stroke-linecap="round"/>
+      <path d="M14 11 H20.25" stroke="#E6ECF4" stroke-width="1.5" stroke-linecap="round"/>
+      <circle cx="11" cy="11" r="3" fill="none" stroke-width="1.5" data-accent="stroke"/>
+    </svg>
+  </button>
+
+  <img id="snorlax" alt="" class="snooze" style="position: absolute; right: 8px; width: 46px; height: 46px; object-fit: contain">
+  <span id="zzz" class="px" style="position: absolute; right: 56px; font-size: 8px; color: #8B97A8">Zzz</span>
+</div>
+
+<script>
+(function () {
+  var SPR = 'pw://sprites/';
+  var gif = function (dex) { return SPR + 'bw/' + dex + '.gif'; };
+  var $ = function (id) { return document.getElementById(id); };
+  var all = function (k) { return document.querySelectorAll('[data-k="' + k + '"]'); };
+  function setText(k, t) { all(k).forEach(function (e) { e.textContent = t; }); }
+  function setHTML(k, h) { all(k).forEach(function (e) { e.innerHTML = h; }); }
+  function setSrc(k, s) { all(k).forEach(function (e) { if (e.getAttribute('src') !== s) { e.src = s; } }); }
+
+  var WX = {
+    s: { name: 'Sunny', dex: 192 },
+    p: { name: 'Part cloud', dex: 333 },
+    c: { name: 'Overcast', dex: 351 },
+    h: { name: 'Haze', dex: 92 },
+    r: { name: 'Rain', dex: 7 },
+    t: { name: 'Storm', dex: 25 },
+    n: { name: 'Snow', dex: 361 },
+    w: { name: 'Windy', dex: 16 }
+  };
+  // WMO weather codes (Open-Meteo) to the design's eight conditions.
+  function cond(code, wind) {
+    if (code == null) { return null; }
+    if (code >= 95) { return 't'; }
+    if ((code >= 71 && code <= 77) || code === 85 || code === 86) { return 'n'; }
+    if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) { return 'r'; }
+    if (code === 45 || code === 48) { return 'h'; }
+    if (wind != null && wind >= 40) { return 'w'; }
+    if (code === 0) { return 's'; }
+    if (code <= 2) { return 'p'; }
+    return 'c';
+  }
+
+  var GREENS = ['rgba(255,255,255,0.09)', '#0E4429', '#006D32', '#26A641', '#39D353'];
+  function level(n) {
+    if (!n) { return 0; }
+    if (n <= 2) { return 1; }
+    if (n <= 5) { return 2; }
+    if (n <= 8) { return 3; }
+    return 4;
+  }
+
+  var state = { data: null, picked: 0, accent: '#FFCB05' };
+
+  function post(msg) {
+    try { window.webkit.messageHandlers.native.postMessage(msg); } catch (e) {}
+  }
+
+  // Drag the widget from anywhere that isn't a button.
+  document.addEventListener('mousedown', function (e) {
+    if (e.button !== 0) { return; }
+    if (e.target.closest('button')) { return; }
+    post({ type: 'drag' });
+  });
+
+  (function weekdays() {
+    var html = '';
+    'SMTWTFS'.split('').forEach(function (l, i) {
+      var c = (i === 0 || i === 6) ? '#6F7C8D' : '#8B97A8';
+      html += '<span class="px" style="font-size: 8px; color: ' + c + '; text-align: center">' + l + '</span>';
+    });
+    $('weekdays').innerHTML = html;
+  })();
+
+  function applyAccent() {
+    var a = state.accent;
+    document.querySelectorAll('[data-accent]').forEach(function (e) {
+      if (e.getAttribute('data-accent') === 'stroke') { e.setAttribute('stroke', a); } else { e.style.color = a; }
+    });
+  }
+
+  function dayWeather(d, n) {
+    return weatherFor(d, d.month.ym + '-' + (n < 10 ? '0' : '') + n);
+  }
+  function weatherFor(d, key) {
+    var w = d.weather && d.weather.days ? d.weather.days[key] : null;
+    if (!w) { return null; }
+    var k = cond(w[0], w[3]);
+    return { k: k, name: WX[k].name, dex: WX[k].dex, hi: Math.round(w[1]), lo: Math.round(w[2]) };
+  }
+
+  function renderDetail() {
+    var d = state.data, sel = state.picked;
+    if (!d || !sel) { $('detail').textContent = 'bar = commits that day'; return; }
+    var w = dayWeather(d, sel);
+    var t = d.month.short + ' ' + sel;
+    t += w ? ' · ' + w.name + ' ' + w.hi + '°/' + w.lo + '°' : ' · no forecast yet';
+    if (sel <= d.month.today && d.commits) { t += ' · ' + (d.commits.byDay[sel - 1] || 0) + ' commits'; }
+    $('detail').textContent = t;
+  }
+
+  function renderCalendar() {
+    var d = state.data, m = d.month, a = state.accent;
+    var rows = Math.ceil((m.firstWeekday + m.days) / 7);
+    var h = rows > 5 ? 36 : 44, sp = rows > 5 ? 18 : 22;
+    var html = '';
+    for (var b = 0; b < m.firstWeekday; b++) { html += '<span></span>'; }
+    for (var n = 1; n <= m.days; n++) {
+      var w = dayWeather(d, n);
+      var past = n <= m.today, isToday = n === m.today;
+      var c = past && d.commits ? (d.commits.byDay[n - 1] || 0) : null;
+      var bg = state.picked === n ? 'rgba(255,255,255,0.12)' : (isToday ? 'rgba(255,255,255,0.09)' : 'rgba(255,255,255,0.045)');
+      var ring = isToday ? 'inset 0 0 0 1.5px ' + a : 'inset 0 0 0 1px rgba(255,255,255,0.04)';
+      var stripe = past && d.commits ? GREENS[level(c)] : 'transparent';
+      var aria = m.long + ' ' + n + (w ? ', ' + w.name + ', high ' + w.hi + ' degrees, low ' + w.lo + ' degrees' : '') + (c != null ? ', ' + c + ' commits' : '');
+      html += '<button type="button" class="daycell" data-n="' + n + '" aria-label="' + aria + '" style="height: ' + h + 'px; background: ' + bg + '; box-shadow: ' + ring + '">'
+        + '<span style="display: flex; align-items: baseline; justify-content: space-between; gap: 1px">'
+        + '<span style="font-size: 10px; font-weight: 700; color: ' + (isToday ? a : '#E6ECF4') + '">' + n + '</span>'
+        + '<span style="font-size: 9px; font-weight: 600; color: #B9C5D4">' + (w ? w.hi + '°' : '') + '</span></span>'
+        + (w ? '<img src="' + gif(w.dex) + '" alt="" style="width: ' + sp + 'px; height: ' + sp + 'px; object-fit: contain; align-self: center">'
+             : '<span style="height: ' + sp + 'px"></span>')
+        + '<span style="display: block; height: 3px; border-radius: 2px; background: ' + stripe + '"></span>'
+        + '</button>';
+    }
+    $('days').innerHTML = html;
+  }
+
+  $('days').addEventListener('click', function (e) {
+    var b = e.target.closest('.daycell');
+    if (!b) { return; }
+    var n = +b.getAttribute('data-n');
+    state.picked = state.picked === n ? 0 : n;
+    renderCalendar();
+    renderDetail();
+  });
+
+  function renderHeader() {
+    var d = state.data;
+    setText('name', d.name);
+    setText('dateLine', d.dateLine);
+    setText('dateShort', d.dateShort || '');
+    var cur = d.weather && d.weather.current;
+    var today = dayWeather(d, d.month.today);
+    var name;
+    if (cur) {
+      var k = cond(cur.code, cur.wind);
+      name = WX[k].name;
+      setText('wxTemp', Math.round(cur.temp) + '°');
+      setText('wxName', name);
+      setSrc('wxSprite', gif(WX[k].dex));
+    } else {
+      name = d.weatherError ? 'Offline' : 'Loading';
+      setText('wxTemp', '--°');
+      setText('wxName', name);
+    }
+    setHTML('wxHL', today ? 'H ' + today.hi + '° &nbsp;L ' + today.lo + '°' : '&nbsp;');
+    setText('wxLine', name + (today ? ' · H ' + today.hi + '° L ' + today.lo + '°' : ''));
+    renderNext7();
+  }
+
+  function renderNext7() {
+    var d = state.data, up = d.upcoming || [];
+    var a = state.accent;
+    $('next7').innerHTML = up.map(function (u) {
+      var w = weatherFor(d, u.key);
+      // Today gets the same accent ring as today's cell on the big calendar.
+      var box = u.today
+        ? 'background: rgba(255,255,255,0.09); box-shadow: inset 0 0 0 1.5px ' + a + ';'
+        : 'background: transparent;';
+      return '<div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; border-radius: 8px; ' + box + '">'
+        + '<span class="px" style="font-size: 8px; color: ' + (u.today ? a : '#8B97A8') + '">' + u.letter + '</span>'
+        + (w ? '<img src="' + gif(w.dex) + '" alt="' + w.name + '" style="width: 30px; height: 30px; object-fit: contain">'
+             : '<span style="width: 30px; height: 30px"></span>')
+        + '<span style="font-size: 12px; font-weight: 700; color: ' + (u.today ? '#F2F6FB' : '#E6ECF4') + '">' + (w ? w.hi + '°' : '–') + '</span>'
+        + '</div>';
+    }).join('');
+  }
+
+  function renderStreak() {
+    var d = state.data, c = d.commits;
+    if (!c) {
+      setText('streak', '–');
+      setText('evoNote', 'GitHub contributions unavailable');
+      setSrc('streakSprite', gif(4));
+      $('week').innerHTML = '';
+      return;
+    }
+    var streak = c.streak;
+    setText('streak', streak);
+    setText('streakUnit', streak === 1 ? 'day' : 'days');
+    setText('streakUnitLong', 'day streak');
+    var sprite = 4, note;
+    if (streak >= 30) { sprite = 6; note = 'Charizard · fully evolved'; }
+    else if (streak >= 7) { sprite = 5; note = 'Charmeleon · ' + (30 - streak) + ' days to Charizard'; }
+    else { note = 'Charmander · ' + (7 - streak) + ' day' + (7 - streak === 1 ? '' : 's') + ' to evolve'; }
+    setSrc('streakSprite', gif(sprite));
+    setText('evoNote', note);
+    var maxC = 1;
+    c.last7.forEach(function (n) { maxC = Math.max(maxC, n); });
+    $('week').innerHTML = c.last7.map(function (n) {
+      return '<span style="flex: 1 1 0; border-radius: 2px; background: ' + GREENS[level(n)] + '; height: ' + Math.max(3, Math.round((n / maxC) * 22)) + 'px"></span>';
+    }).join('');
+  }
+
+  function renderSystem() {
+    var s = state.data && state.data.system;
+    if (!s) { return; }
+    var hp = Math.round(s.memFree);
+    $('model').textContent = s.model;
+    $('level').textContent = 'Lv.' + s.level;
+    var hpColor = hp > 60 ? '#39D353' : (hp > 30 ? '#FFCB05' : '#E3350D');
+    [$('hpBar')].concat([].slice.call(all('hpBar'))).forEach(function (b) {
+      b.style.width = hp + '%';
+      b.style.backgroundColor = hpColor;
+    });
+    $('hpNote').textContent = hp + '% memory free';
+    setText('hpPct', hp + '%');
+    var v = hp > 60 ? 39 : (hp > 30 ? 54 : 92);
+    var src = gif(v);
+    if ($('vitalSprite').getAttribute('src') !== src) { $('vitalSprite').src = src; }
+    setSrc('vitalSprite', src);
+    $('cpu').textContent = Math.round(s.cpu) + '%';
+    $('disk').textContent = Math.round(s.disk) + '%';
+    $('bat').textContent = s.battery == null ? 'AC' : s.battery + '%';
+  }
+
+  // ---------- Route: Pokémon walking with real walk-cycle sheets ----------
+  var walk = {};          // dex -> {fw, fh, durs, padSide, padDown, h}
+  var walkShiny = {};     // same, for the shiny sheets
+  var walkers = [];
+  var shinyOdds = 64;     // 1 in N spawns is shiny
+  var ROW_DOWN = 0, ROW_RIGHT = 2, ROW_LEFT = 6;
+
+  // Route geometry for each size.
+  var ROUTES = {
+    large:  { w: 532, h: 56, pad: 6, radius: 14, ground: 10, minX: 54, right: 64, count: 3, ball: true,  snorlax: true,  maxH: 40 },
+    // Medium's route is open ground (no panel), like the mockup.
+    medium: { w: 712, h: 48, pad: 0, radius: 0, ground: 6, minX: 50, right: 52, count: 4, ball: true, snorlax: true, maxH: 40,
+              open: true, ballSize: 36, snorlaxSize: 40, grass: [230, 480] },
+    small:  { w: 146, h: 46, pad: 4, radius: 12, ground: 8,  minX: 4,  right: 4,  count: 1, ball: false, snorlax: false, maxH: 34 },
+    mini:   { w: 320, h: 64, pad: 6, radius: 16, ground: 12, minX: 54, right: 62, count: 2, ball: true,  snorlax: true,  maxH: 44 }
+  };
+  var size = 'large';
+  var G = ROUTES.large;
+
+  function rand(a, b) { return a + Math.random() * (b - a); }
+  function maxXFor(fw) { return G.w - G.right - fw; }
+
+  function Walker(dex, x, shiny, quiet) {
+    var m = shiny ? walkShiny[dex] : walk[dex];
+    this.dex = dex; this.m = m; this.shiny = !!shiny;
+    this.sparkleIn = rand(0.6, 2);
+    this.x = x; this.dir = Math.random() < 0.5 ? -1 : 1;
+    this.mode = 'idle'; this.timer = rand(0.3, 2.5);
+    this.frame = 0; this.ft = 0;
+    this.speed = rand(14, 24);
+    var el = document.createElement('div');
+    el.className = 'walker';
+    el.style.width = m.fw + 'px';
+    el.style.height = m.fh + 'px';
+    el.style.backgroundImage = 'url(' + SPR + (shiny ? 'shiny/walk/' : 'walk/') + dex + '.png)';
+    el.style.opacity = '0';
+    this.el = el;
+    $('route').insertBefore(el, $('snorlax'));
+    this.draw();
+    requestAnimationFrame(function () { el.style.opacity = '1'; });
+    if (this.shiny && !quiet) { this.celebrate(); }
+  }
+  Walker.prototype.sparkle = function () {
+    var s = document.createElement('span');
+    s.className = 'sparkle';
+    s.style.color = Math.random() < 0.5 ? '#FFF6C2' : state.accent;
+    s.style.left = Math.round(this.x + rand(-3, this.m.fw - 4)) + 'px';
+    s.style.bottom = Math.round(G.ground + rand(0, this.m.h + 6)) + 'px';
+    $('route').appendChild(s);
+    setTimeout(function () { s.remove(); }, 950);
+  };
+  Walker.prototype.celebrate = function () {
+    var self = this;
+    for (var i = 0; i < 9; i++) { setTimeout(function () { if (self.el.isConnected) { self.sparkle(); } }, i * 110); }
+    var tag = document.createElement('span');
+    tag.className = 'shinyTag';
+    tag.textContent = 'SHINY!';
+    tag.style.color = state.accent;
+    tag.style.left = Math.round(Math.max(G.minX - 2, Math.min(this.x + this.m.fw / 2 - 18, G.w - G.right - 36))) + 'px';
+    $('route').appendChild(tag);
+    setTimeout(function () { tag.style.opacity = '0'; }, 5000);
+    setTimeout(function () { tag.remove(); }, 6000);
+    post({ type: 'shiny', dex: this.dex });
+  };
+  Walker.prototype.step = function (dt) {
+    if (this.shiny) {
+      this.sparkleIn -= dt;
+      if (this.sparkleIn <= 0) { this.sparkle(); this.sparkleIn = rand(0.8, 2.4); }
+    }
+    if (this.mode === 'idle') {
+      this.timer -= dt;
+      if (this.timer <= 0) {
+        var lo = G.minX, hi = maxXFor(this.m.fw);
+        this.target = Math.round(rand(lo, hi));
+        if (Math.abs(this.target - this.x) < 20) { this.target = this.x < (lo + hi) / 2 ? hi : lo; }
+        this.dir = this.target > this.x ? 1 : -1;
+        this.mode = 'walk'; this.frame = 0; this.ft = 0;
+      }
+    } else {
+      this.x += this.dir * this.speed * dt;
+      if ((this.dir > 0 && this.x >= this.target) || (this.dir < 0 && this.x <= this.target)) {
+        this.x = this.target; this.mode = 'idle'; this.timer = rand(1.2, 4.5); this.frame = 0;
+      } else {
+        this.ft += dt * 60;
+        while (this.ft >= this.m.durs[this.frame]) {
+          this.ft -= this.m.durs[this.frame];
+          this.frame = (this.frame + 1) % this.m.durs.length;
+        }
+      }
+    }
+    this.draw();
+  };
+  Walker.prototype.draw = function () {
+    var m = this.m, row, pad;
+    if (this.mode === 'walk') { row = this.dir > 0 ? ROW_RIGHT : ROW_LEFT; pad = m.padSide; }
+    else { row = ROW_DOWN; pad = m.padDown; }
+    this.el.style.bottom = (G.ground - pad) + 'px';
+    this.el.style.backgroundPosition = (-this.frame * m.fw) + 'px ' + (-row * m.fh) + 'px';
+    this.el.style.transform = 'translateX(' + Math.round(this.x) + 'px)';
+  };
+  Walker.prototype.remove = function () {
+    var el = this.el;
+    el.style.opacity = '0';
+    setTimeout(function () { el.remove(); }, 750);
+  };
+
+  function fits(map, d) { return map[d] && map[d].h <= G.maxH && map[d].fw <= G.w - G.minX - G.right; }
+
+  function rollShiny(dex, force) {
+    if (!fits(walkShiny, dex)) { return false; }
+    return force || Math.random() < 1 / shinyOdds;
+  }
+
+  function place(m, x) { return Math.max(G.minX, Math.min(x, maxXFor(m.fw))); }
+
+  function spawn(dex, x, forceShiny) {
+    var shiny = rollShiny(dex, forceShiny);
+    var m = shiny ? walkShiny[dex] : walk[dex];
+    return new Walker(dex, place(m, x), shiny);
+  }
+
+  function slotX(i, n) { return G.minX + ((G.w - G.right - G.minX) / n) * (i + 0.3); }
+
+  function setRoster(dexes) {
+    walkers.forEach(function (w) { w.remove(); });
+    walkers = [];
+    var usable = dexes.filter(function (d) { return fits(walk, d); }).slice(0, G.count);
+    while (usable.length < G.count) {
+      var extra = randomDex(usable, false);
+      if (extra == null) { break; }
+      usable.push(extra);
+    }
+    usable.forEach(function (dex, i) { walkers.push(spawn(dex, slotX(i, usable.length))); });
+  }
+
+  function randomDex(exclude, needShiny) {
+    var pool = Object.keys(walk).map(Number).filter(function (d) {
+      return d !== 143 && fits(walk, d) && exclude.indexOf(d) < 0 && (!needShiny || fits(walkShiny, d));
+    });
+    return pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
+  }
+
+  function shuffle() {
+    var pick = [];
+    while (pick.length < G.count) {
+      var d = randomDex(pick, false);
+      if (d == null) { break; }
+      pick.push(d);
+    }
+    setRoster(pick);
+  }
+  $('ball').addEventListener('click', shuffle);
+
+  // Swap one visitor for a new one (a fresh chance at a shiny).
+  function rotate(forceShiny) {
+    if (!walkers.length) { return; }
+    var i = Math.floor(Math.random() * walkers.length);
+    if (forceShiny) {
+      var plain = walkers.map(function (w, k) { return w.shiny ? -1 : k; }).filter(function (k) { return k >= 0; });
+      if (plain.length) { i = plain[Math.floor(Math.random() * plain.length)]; }
+    }
+    var old = walkers[i];
+    var dex = randomDex(walkers.map(function (w) { return w.dex; }), forceShiny);
+    if (dex == null) { return; }
+    old.remove();
+    walkers[i] = spawn(dex, old.x, forceShiny);
+  }
+  (function schedule() {
+    setTimeout(function () { rotate(false); schedule(); }, rand(240, 480) * 1000);
+  })();
+
+  // Re-fit the route and its visitors to the current size, keeping who's there (and their shininess).
+  function layoutRoute() {
+    var r = $('route');
+    var slot = document.querySelector('#' + { large: 'lg', medium: 'md', small: 'sm', mini: 'mi' }[size] + ' .routeSlot');
+    slot.appendChild(r);
+    r.style.width = G.w + 'px';
+    r.style.height = G.h + 'px';
+    r.style.padding = G.pad + 'px';
+    r.style.borderRadius = G.radius + 'px';
+    r.style.background = G.open ? 'transparent' : '';
+    r.style.boxShadow = G.open ? 'none' : '';
+    $('groundLine').style.bottom = (G.ground + 1) + 'px';
+    $('groundLine').style.background = G.open ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.07)';
+    var defaultGrass = [150, 318, 424, 96];
+    document.querySelectorAll('#route .grass').forEach(function (g, i) {
+      var left = G.grass ? G.grass[i] : defaultGrass[i];
+      g.style.display = left == null ? 'none' : 'block';
+      if (left != null) { g.style.left = left + 'px'; }
+      g.style.bottom = (G.ground - 1) + 'px';
+    });
+    var bs = G.ballSize || 44;
+    $('ball').style.display = G.ball ? 'flex' : 'none';
+    $('ball').style.width = bs + 'px';
+    $('ball').style.height = bs + 'px';
+    $('ball').style.marginTop = (-bs / 2) + 'px';
+    var ss = G.snorlaxSize || 46;
+    $('snorlax').style.display = G.snorlax ? 'block' : 'none';
+    $('snorlax').style.width = ss + 'px';
+    $('snorlax').style.height = ss + 'px';
+    $('snorlax').style.right = (G.open ? 0 : 8) + 'px';
+    $('zzz').style.display = G.snorlax ? 'block' : 'none';
+    $('snorlax').style.bottom = (G.ground - 2) + 'px';
+    $('zzz').style.top = Math.max(4, G.h - ss - 1) + 'px';
+    $('zzz').style.right = (ss + (G.open ? 2 : 10)) + 'px';
+
+    if (!Object.keys(walk).length) { return; }
+    var keep = walkers.filter(function (w) { return fits(w.shiny ? walkShiny : walk, w.dex); }).slice(0, G.count);
+    walkers.forEach(function (w) { if (keep.indexOf(w) < 0) { w.el.remove(); } });
+    walkers = keep;
+    walkers.forEach(function (w, i) { w.x = place(w.m, Math.min(w.x, slotX(i, G.count))); w.mode = 'idle'; w.timer = rand(0.3, 1.5); w.draw(); });
+    while (walkers.length < G.count) {
+      var d = randomDex(walkers.map(function (w) { return w.dex; }), false);
+      if (d == null) { break; }
+      walkers.push(new Walker(d, place(walk[d], slotX(walkers.length, G.count)), false, true));
+    }
+  }
+
+  function setSize(s) {
+    if (!ROUTES[s]) { s = 'large'; }
+    size = s;
+    G = ROUTES[s];
+    document.body.setAttribute('data-size', s);
+    layoutRoute();
+  }
+
+  var last = 0;
+  function tick(t) {
+    var dt = last ? Math.min(0.1, (t - last) / 1000) : 0;
+    last = t;
+    for (var i = 0; i < walkers.length; i++) { walkers[i].step(dt); }
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+
+  $('snorlax').src = gif(143);
+  applyAccent();
+  setSize('large');
+
+  window.pw = {
+    setWalk: function (w) {
+      walk = w.normal || {};
+      walkShiny = w.shiny || {};
+      setRoster([133, 54, 1]);   // the design's opening roster: Eevee, Psyduck, Bulbasaur
+    },
+    setSize: setSize,
+    summonShiny: function () { rotate(true); },
+    update: function (d) {
+      state.data = d;
+      if (d.shinyOdds) { shinyOdds = Math.max(1, d.shinyOdds); }
+      if (d.accent) { state.accent = d.accent; applyAccent(); }
+      if (d.size && d.size !== size) { setSize(d.size); }
+      if (state.picked > d.month.days) { state.picked = 0; }
+      $('monthLabel').textContent = d.month.label;
+      renderHeader();
+      renderCalendar();
+      renderDetail();
+      renderStreak();
+      renderSystem();
+    },
+    system: function (s) {
+      if (!state.data) { return; }
+      state.data.system = s;
+      renderSystem();
+    },
+    shuffle: shuffle
+  };
+  post({ type: 'ready' });
+})();
+</script>
+</body>
+</html>
