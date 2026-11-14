@@ -24,7 +24,7 @@ struct Settings {
 
     static let sizes: [(key: String, title: String, size: NSSize)] = [
         ("large", "Large  (560 × 470)", NSSize(width: 560, height: 470)),
-        ("medium", "Medium  (748 × 220)", NSSize(width: 748, height: 220)),
+        ("medium", "Medium  (748 × 190)", NSSize(width: 748, height: 190)),
         ("small", "Small  (170 × 170)", NSSize(width: 170, height: 170)),
         ("mini", "Mini route  (320 × 64)", NSSize(width: 320, height: 64)),
     ]

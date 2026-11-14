@@ -12,7 +12,7 @@ A hobby project: a native macOS app (Swift + WebKit) that pins a transparent win
 
 Switch between four sizes from the menu bar icon (**◎ → Size**).
 
-| Medium (748 × 220) |
+| Medium (748 × 190) |
 |---|
 | ![Medium widget](screenshots/medium.png) |
 
