@@ -23,7 +23,7 @@
   .ball { appearance: none; -webkit-appearance: none; border: 0; margin: 0; padding: 0; cursor: pointer; position: absolute; left: 4px; top: 50%; margin-top: -22px; width: 44px; height: 44px; border-radius: 12px; background: rgba(255,255,255,0.05); display: flex; align-items: center; justify-content: center; z-index: 5; }
   .ball:hover { filter: brightness(1.25); }
   .ball:active { transform: scale(0.94); }
-  .walker { position: absolute; left: 0; image-rendering: pixelated; background-repeat: no-repeat; will-change: transform; transition: opacity .7s ease; cursor: grab; transform-origin: 50% 40%; }
+  .walker { position: absolute; left: 0; image-rendering: pixelated; background-repeat: no-repeat; will-change: transform; transition: opacity .7s ease, filter .35s ease; cursor: grab; transform-origin: 50% 40%; }
   body.grabbing, body.grabbing * { cursor: grabbing !important; }
   #snorlax { cursor: pointer; }
   @keyframes stir { 0%, 100% { transform: none; } 20% { transform: translateX(-2px) rotate(-5deg); } 40% { transform: translateX(2px) rotate(4deg); } 60% { transform: translate(-1px, -2px); } 80% { transform: translateX(1px); } }
@@ -32,6 +32,17 @@
   .emote svg { display: block; }
   @keyframes emote { 0% { transform: translateY(3px) scale(.3); opacity: 0; } 14% { transform: translateY(0) scale(1.2); opacity: 1; } 24% { transform: scale(1); } 75% { opacity: 1; } 100% { transform: translateY(-9px); opacity: 0; } }
   .nameTag { position: absolute; z-index: 7; pointer-events: none; font-family: Silkscreen, ui-monospace, monospace; font-size: 8px; letter-spacing: .5px; line-height: 10px; padding: 1px 4px; border-radius: 4px; background: rgba(10,14,19,.88); color: #E6ECF4; white-space: nowrap; box-shadow: 0 0 0 1px rgba(255,255,255,.08); }
+  .berryBtn { appearance: none; -webkit-appearance: none; border: 0; margin: 0; padding: 0; position: absolute; width: 18px; height: 18px; border-radius: 6px; background: #1B2430; box-shadow: 0 0 0 1px rgba(255,255,255,.1); display: flex; align-items: center; justify-content: center; cursor: grab; z-index: 6; }
+  .berryBtn:hover { filter: brightness(1.3); }
+  .berryBtn svg { display: block; }
+  .spirit { position: absolute; z-index: 7; pointer-events: none; opacity: 0; animation: spirit 2.6s ease-out forwards; }
+  .spirit svg { display: block; }
+  @keyframes spirit { 0% { transform: translate(0, 0); opacity: 0; } 15% { opacity: .9; } 50% { transform: translate(3px, -12px); } 100% { transform: translate(-2px, -26px); opacity: 0; } }
+  .item { position: absolute; z-index: 4; pointer-events: none; transition: transform .2s ease; }
+  .item svg { display: block; }
+  .item.falling { transition: bottom .35s cubic-bezier(.55, 0, 1, .45), transform .2s ease; }
+  .item.taken { transform: translateY(-14px) scale(1.4); opacity: 0; transition: transform .55s ease-out, opacity .55s ease-out; }
+  .walker.evolving { filter: brightness(0) invert(1) drop-shadow(0 0 2px #fff) drop-shadow(0 0 4px rgba(255,255,255,.7)); }
   .dust { position: absolute; width: 2px; height: 2px; background: #9AA7B8; pointer-events: none; z-index: 3; transition: transform .45s ease-out, opacity .45s ease-out; }
   @keyframes snooze { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
   .snooze { animation: snooze 3.4s ease-in-out infinite; }
@@ -224,6 +235,7 @@
   <svg class="grass" width="12" height="10" viewBox="0 0 12 10" aria-hidden="true" style="position: absolute; left: 424px; opacity: 0.5"><path d="M2 10 L4 2 M6 10 L6 1 M10 10 L8 3" stroke="#4E7F5A" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
   <svg class="grass" width="12" height="10" viewBox="0 0 12 10" aria-hidden="true" style="position: absolute; left: 96px; opacity: 0.5"><path d="M2 10 L4 2 M6 10 L6 1 M10 10 L8 3" stroke="#4E7F5A" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
 
+  <button type="button" class="berryBtn" id="berry" aria-label="Give the Pokémon a berry: click, or drag it onto the route"></button>
   <button type="button" class="ball" id="ball" aria-label="Shuffle the Pokémon roaming this route">
     <svg width="22" height="22" viewBox="0 0 22 22" role="img" aria-label="Poké Ball">
       <circle cx="11" cy="11" r="9.25" fill="none" stroke="#E6ECF4" stroke-width="1.5"/>
@@ -296,6 +308,19 @@
   // Press on a Pokémon: a click pets it, a drag picks it up.
   document.addEventListener('mousemove', function (e) {
     if (!press) { return; }
+    if (press.food) {   // carrying a berry from the badge
+      var p = routePoint(e);
+      if (!press.it) {
+        if (Math.abs(e.clientX - press.x0) + Math.abs(e.clientY - press.y0) < 4) { return; }
+        press.it = new Item(press.kind, p.x, 1);
+        press.it.landed = false;
+        document.body.classList.add('grabbing');
+      }
+      press.it.x = clamp(p.x, 5, G.w - 5);
+      press.it.y = clamp(p.y - G.ground - 4, 0, G.h - G.ground - 10);
+      press.it.place();
+      return;
+    }
     if (!press.held) {
       if (Math.abs(e.clientX - press.x0) + Math.abs(e.clientY - press.y0) < 4) { return; }
       press.held = true;
@@ -307,9 +332,16 @@
     if (!press) { return; }
     var p = press;
     endPress();
-    if (p.held) { p.w.drop(); } else { p.w.pet(); }
+    if (p.food) {
+      if (p.it) { p.it.fall(); } else { dropFoodAt(rand(G.minX + 10, G.w - G.right - 10), G.h - G.ground - 10); }
+    } else if (p.held) { p.w.drop(); } else { p.w.pet(); }
   });
-  window.addEventListener('blur', function () { if (press) { var p = press; endPress(); if (p.held) { p.w.drop(); } } });
+  window.addEventListener('blur', function () {
+    if (!press) { return; }
+    var p = press;
+    endPress();
+    if (p.food && p.it) { p.it.fall(); } else if (p.held) { p.w.drop(); }
+  });
 
   (function weekdays() {
     var html = '';
@@ -490,6 +522,8 @@
   var walkShiny = {};     // same, for the shiny sheets
   var walkers = [];
   var names = {};         // dex -> display name
+  var evolutions = {};    // dex -> [dex it can evolve into]
+  var items = [];         // berries and apples on the route
   var shinyOdds = 64;     // 1 in N spawns is shiny
   var ROW_DOWN = 0, ROW_RIGHT = 2, ROW_LEFT = 6;
 
@@ -522,6 +556,9 @@
     this.speed = rand(14, 24); this.walkSpeed = this.speed;
     this.anim = null; this.face = null; this.seq = 0; this.partner = null;
     this.cool = rand(4, 10); this.pets = []; this.hover = false; this.tag = null;
+    this.affection = 0;     // pets, gifts and snacks; makes evolving likelier
+    this.food = null;       // the item it's carrying, walking to or eating
+    this.onArrive = null;   // set while it walks somewhere on purpose
     var el = document.createElement('div');
     el.className = 'walker';
     el.style.opacity = '0';
@@ -574,9 +611,9 @@
     var a = this.m.anims && this.m.anims[name];
     if (a) {
       return { url: this.base + 'anim/' + a.src + '/' + this.dex + '.png', fw: a.fw, fh: a.fh, durs: a.durs,
-               hit: a.hit != null ? a.hit : Math.floor(a.durs.length / 2) };
+               hit: a.hit != null ? a.hit : Math.floor(a.durs.length / 2), rows: a.rows || 8 };
     }
-    var durs = name === 'Idle' ? [40] : this.m.durs;
+    var durs = name === 'Idle' || name === 'Sleep' || name === 'Wake' ? [40] : this.m.durs;
     return { url: this.base + 'walk/' + this.dex + '.png', fw: this.m.fw, fh: this.m.fh, durs: durs,
              hit: Math.floor(durs.length / 2), fake: name };
   };
@@ -585,10 +622,11 @@
     opts = opts || {};
     var s = this.sheetFor(name), total = 0;
     s.durs.forEach(function (d) { total += d; });
-    this.anim = { s: s, row: row, frame: 0, ft: 0, t: 0, total: total, loops: opts.loops || 1, hit: opts.hit, done: opts.done };
+    this.anim = { s: s, row: row, frame: 0, ft: 0, t: 0, total: total, loops: opts.loops || 1, hit: opts.hit, done: opts.done, keep: opts.keep };
   };
   Walker.prototype.stepAnim = function (dt) {
     var a = this.anim;
+    if (a.frozen) { return; }
     a.ft += dt * 60; a.t += dt * 60;
     while (this.anim === a && a.ft >= a.s.durs[a.frame]) {
       a.ft -= a.s.durs[a.frame];
@@ -597,7 +635,12 @@
       if (this.anim !== a) { break; }
       if (a.frame >= a.s.durs.length) {
         if (--a.loops > 0) { a.frame = 0; a.t = 0; }
-        else { a.frame = a.s.durs.length - 1; this.anim = null; if (a.done) { a.done(); } }
+        else {
+          a.frame = a.s.durs.length - 1;
+          if (a.keep) { a.frozen = true; } else { this.anim = null; }   // keep: stay on the last frame
+          if (a.done) { a.done(); }
+          break;
+        }
       }
     }
   };
@@ -609,23 +652,31 @@
     this.anim = null; this.partner = null; this.face = null;
     this.mode = 'idle'; this.timer = pause != null ? pause : rand(0.6, 2);
     this.frame = 0; this.y = 0; this.vy = 0; this.tilt = 0; this.walkSpeed = this.speed;
+    this.onArrive = null;
+    this.dropFood();
     this.el.style.zIndex = '';
+    this.el.classList.remove('evolving');
   };
-  Walker.prototype.walkTo = function (x, speed) {
+  // Walk to x. With onArrive, it's on an errand: it calls that on arrival instead of idling.
+  Walker.prototype.walkTo = function (x, speed, onArrive) {
     var t = Math.round(place(this.m, x));
-    if (Math.abs(t - this.x) < 4) { return; }
+    if (Math.abs(t - this.x) < 4) {
+      if (onArrive) { this.mode = 'act'; this.anim = null; onArrive(); }
+      return;
+    }
     this.target = t; this.dir = t > this.x ? 1 : -1;
     this.mode = 'walk'; this.frame = 0; this.ft = 0; this.anim = null; this.face = null;
     this.walkSpeed = speed || this.speed;
+    this.onArrive = onArrive || null;
   };
   // Leave whatever scene this walker shares with another (the other one goes back to roaming).
   Walker.prototype.breakUp = function () {
     var p = this.partner;
     if (!p) { return; }
     this.partner = null; p.partner = null;
-    if (p.mode === 'act') { p.resume(rand(0.3, 1)); }
+    if (p.mode === 'act' || p.onArrive) { p.resume(rand(0.3, 1)); }
   };
-  Walker.prototype.busy = function () { return this.mode === 'act' || this.mode === 'held' || this.mode === 'fall'; };
+  Walker.prototype.busy = function () { return this.mode !== 'idle' && this.mode !== 'walk' && this.mode !== 'look'; };
   Walker.prototype.step = function (dt) {
     if (this.shiny) {
       this.sparkleIn -= dt;
@@ -637,9 +688,19 @@
       this.tilt *= Math.pow(0.03, dt);
     } else if (this.mode === 'fall') {
       this.fall(dt);
+    } else if (this.mode === 'sleep') {
+      this.timer -= dt; this.zIn -= dt;
+      if (this.zIn <= 0) { this.emote('zzz', rand(-2, 6)); this.zIn = rand(1.6, 2.6); }
+      if (this.timer <= 0) { this.wake(false); }
+    } else if (this.mode === 'gift') {
+      this.timer -= dt; this.hopIn -= dt;
+      if (this.timer <= 0) { this.emote('sweat'); this.eatAlone(); }
+      else if (this.hopIn <= 0) { var self = this; this.hopIn = rand(2, 3); this.play('Hop', ROW_DOWN, { done: function () { self.hold(); } }); }
     } else if (this.mode === 'idle') {
       this.timer -= dt;
-      if (this.timer <= 0) {
+      if (this.timer <= 0 && this.whim()) {
+        // started something of its own
+      } else if (this.timer <= 0) {
         var lo = G.minX, hi = maxXFor(this.m.fw);
         var t = Math.round(rand(lo, hi));
         if (Math.abs(t - this.x) < 20) { t = this.x < (lo + hi) / 2 ? hi : lo; }
@@ -649,6 +710,7 @@
       this.x += this.dir * this.walkSpeed * dt;
       if ((this.dir > 0 && this.x >= this.target) || (this.dir < 0 && this.x <= this.target)) {
         this.x = this.target; this.mode = 'idle'; this.timer = rand(1.2, 4.5); this.frame = 0; this.walkSpeed = this.speed;
+        if (this.onArrive) { var go = this.onArrive; this.onArrive = null; this.mode = 'act'; go(); }
       } else {
         this.ft += dt * 60 * Math.max(1, this.walkSpeed / this.speed);
         while (this.ft >= this.m.durs[this.frame]) {
@@ -670,7 +732,8 @@
       else if (s.fake === 'Hurt' || s.fake === 'Charge') { ox = frame % 2 ? 1 : -1; }
       else if (s.fake === 'Attack') { ox = Math.sin(p * Math.PI) * 6 * toward; }
       else if (s.fake === 'Rotate') { row = [0, 2, 4, 6][Math.floor(p * 8) % 4]; }
-      if (s.fake === 'Idle') { frame = 0; }
+      else if (s.fake === 'Eat') { oy = -Math.abs(Math.sin(p * Math.PI * 4)) * 1.5; frame = 0; }
+      if (s.fake === 'Idle' || s.fake === 'Sleep' || s.fake === 'Wake') { frame = 0; }
     }
     var url = a ? s.url : this.base + 'walk/' + this.dex + '.png';
     var key = url + '|' + s.fw + '|' + s.fh;
@@ -681,15 +744,19 @@
       this.el.style.backgroundImage = 'url(' + url + ')';
     }
     // Every sheet shares the walk sheet's anchor (the frame centre), so bigger frames just shift by half the difference.
-    var pad = (row === ROW_RIGHT || row === ROW_LEFT ? m.padSide : m.padDown) + (s.fh - m.fh) / 2;
+    var pad = (s.rows !== 1 && (row === ROW_RIGHT || row === ROW_LEFT) ? m.padSide : m.padDown) + (s.fh - m.fh) / 2;
     this.el.style.bottom = Math.round(G.ground - pad + this.y + oy) + 'px';
-    this.el.style.backgroundPosition = (-frame * s.fw) + 'px ' + (-row * s.fh) + 'px';
+    this.el.style.backgroundPosition = (-frame * s.fw) + 'px ' + (-(s.rows === 1 ? 0 : row) * s.fh) + 'px';
     this.el.style.transform = 'translateX(' + Math.round(this.x - (s.fw - m.fw) / 2 + ox) + 'px)' +
       (Math.abs(this.tilt) > 0.5 ? ' rotate(' + this.tilt.toFixed(1) + 'deg)' : '');
     if (this.tag) { this.placeTag(); }
+    if (this.food && this.food.holder === this) {
+      this.food.x = this.center(); this.food.y = this.y + oy + this.m.h + 1; this.food.place();
+    }
   };
   Walker.prototype.remove = function () {
     this.breakUp();
+    this.dropFood();
     this.gone = true;
     this.hideTag();
     if (press && press.w === this) { endPress(); }
@@ -707,7 +774,9 @@
     bang:  { c: '#FFE15A', p: ['##', '##', '##', '..', '##'] },
     swirl: { c: '#C9B6FF', p: ['.###.', '#...#', '#.#.#', '#..##', '.##..'] },
     star:  { c: '#FFE15A', p: ['..#..', '.###.', '#####', '.###.', '.#.#.'] },
-    sweat: { c: '#7FC8FF', p: ['.#.', '##.', '###', '###', '.#.'] }
+    sweat: { c: '#7FC8FF', p: ['.#.', '##.', '###', '###', '.#.'] },
+    zzz:   { c: '#C9D6FF', p: ['####', '..#.', '.#..', '####'] },
+    ghost: { c: '#E8EEF8', p: ['.###.', '#####', '#.#.#', '#####', '#####', '#.#.#'] }
   };
   var iconSvg = {};
   function icon(kind) {
@@ -778,9 +847,10 @@
   };
   Walker.prototype.hoverIn = function () {
     this.hover = true;
-    if (press && press.held) { return; }
+    if (press && (press.held || press.it)) { return; }
+    if (this.mode === 'gift') { return; }   // the name tag would cover the present
     this.showTag();
-    if (this.mode === 'idle' || this.mode === 'walk') { this.look(); }
+    if ((this.mode === 'idle' || this.mode === 'walk') && !this.onArrive) { this.look(); }
   };
   Walker.prototype.hoverOut = function () {
     this.hover = false;
@@ -793,8 +863,11 @@
 
   // ---- Click: petting. A few pets make it happy; too many make it cross.
   Walker.prototype.pet = function () {
-    if (this.mode === 'held' || this.mode === 'fall') { return; }
+    if (this.mode === 'held' || this.mode === 'fall' || this.mode === 'evolve' || this.mode === 'faint') { return; }
+    if (this.mode === 'sleep') { this.wake(true); return; }
+    if (this.mode === 'gift') { this.acceptGift(); return; }
     this.breakUp();
+    this.dropFood();
     var now = Date.now(), self = this;
     this.pets = this.pets.filter(function (t) { return now - t < 3000; });
     this.pets.push(now);
@@ -808,6 +881,7 @@
       return;
     }
     this.emote('heart');
+    this.affection = Math.min(10, this.affection + 0.5);
     if (n >= 4) {
       this.emote('note', 7);
       this.later(0.35, function () { self.emote('heart', -6); });
@@ -824,6 +898,7 @@
     this.cool = rand(10, 16);
   };
   Walker.prototype.startle = function () {
+    if (this.mode === 'sleep') { this.wake(true); return; }
     if (this.busy()) { return; }
     var self = this;
     this.seq++; this.mode = 'act'; this.face = ROW_DOWN; this.y = 0;
@@ -838,6 +913,7 @@
     return { x: e.clientX - r.left, y: r.bottom - e.clientY };
   }
   function startPress(w, e) {
+    if (w.mode === 'evolve' || w.mode === 'faint') { return; }
     press = { w: w, x0: e.clientX, y0: e.clientY, lastX: e.clientX, held: false };
   }
   function endPress() {
@@ -846,6 +922,9 @@
   }
   Walker.prototype.pickUp = function () {
     this.breakUp();
+    this.dropFood();
+    this.onArrive = null;
+    this.el.classList.remove('evolving');
     this.seq++;
     this.mode = 'held'; this.face = ROW_DOWN; this.tilt = 0;
     this.hideTag();
@@ -886,6 +965,343 @@
     }
   };
 
+  // ---- Whims: now and then, instead of wandering on, a walker naps, spins or finds a snack.
+  Walker.prototype.whim = function () {
+    var h = new Date().getHours(), night = h >= 22 || h < 6;
+    var r = Math.random(), pSleep = night ? 0.12 : 0.03;
+    if (r < pSleep) { this.sleep(); return true; }
+    r -= pSleep;
+    if (r < 0.04) { this.spin(); return true; }
+    r -= 0.04;
+    if (r < 0.025 && G.count > 0) { this.forage(); return true; }
+    return false;
+  };
+  Walker.prototype.sleep = function (sec) {
+    this.seq++;
+    this.mode = 'sleep'; this.face = ROW_DOWN; this.y = 0;
+    this.timer = sec || rand(15, 40); this.zIn = rand(0.4, 1.2);
+    this.play('Sleep', ROW_DOWN, { loops: Infinity });
+  };
+  Walker.prototype.wake = function (startled) {
+    var self = this;
+    this.seq++;
+    this.mode = 'act'; this.face = ROW_DOWN;
+    if (startled) { this.emote('bang'); }
+    this.play('Wake', ROW_DOWN, { done: function () {
+      if (startled) { self.play('Hop', ROW_DOWN, { done: function () { self.settle(); } }); } else { self.settle(); }
+    } });
+  };
+  Walker.prototype.spin = function () {
+    var self = this;
+    this.seq++;
+    this.mode = 'act'; this.face = ROW_DOWN;
+    this.emote('star');
+    this.play('Rotate', ROW_DOWN, { loops: 3, done: function () {
+      self.emote('note');
+      self.play('Hop', ROW_DOWN, { done: function () { self.settle(); } });
+    } });
+  };
+
+  // ---- Food: berries and apples, drawn as tiny pixel art.
+  var FOOD = {
+    berry: { pal: { g: '#62C46A', b: '#4A7FE0', B: '#BBD6FF', d: '#2F5BB0' },
+             p: ['...gg..', '..g....', '.bbbbb.', 'bBbbbbb', 'bbbbbbd', 'bbbbbdd', '.bdddd.'] },
+    apple: { pal: { s: '#7A4A24', g: '#62C46A', r: '#E23B3B', R: '#FFC2B8', d: '#A8242A' },
+             p: ['...s...', '...sgg.', '.rr.rr.', 'rRrrrrr', 'rrrrrrd', 'rrrrrdd', '.rdddd.'] }
+  };
+  function foodSvg(kind) {
+    var f = FOOD[kind], w = f.p[0].length, h = f.p.length, out = '', fill = '';
+    f.p.forEach(function (line, y) {
+      for (var x = 0; x < w; x++) {
+        var c = f.pal[line[x]];
+        if (!c) { continue; }
+        out += '<rect x="' + x + '" y="' + y + '" width="1" height="1"/>';
+        fill += '<rect x="' + x + '" y="' + y + '" width="1" height="1" fill="' + c + '"/>';
+      }
+    });
+    var o = '';
+    [[-1, 0], [1, 0], [0, -1], [0, 1]].forEach(function (d) { o += '<g transform="translate(' + d[0] + ' ' + d[1] + ')">' + out + '</g>'; });
+    return '<svg width="' + (w + 2) + '" height="' + (h + 2) + '" viewBox="-1 -1 ' + (w + 2) + ' ' + (h + 2) +
+      '" shape-rendering="crispEdges" aria-hidden="true"><g fill="#0B0F14">' + o + '</g>' + fill + '</svg>';
+  }
+  function randomFood() { return Math.random() < 0.5 ? 'berry' : 'apple'; }
+
+  function Item(kind, x, y) {
+    this.kind = kind; this.x = x; this.y = y || 0;
+    this.holder = null; this.claim = null; this.landed = !y; this.bites = 0;
+    var el = document.createElement('span');
+    el.className = 'item';
+    el.innerHTML = foodSvg(kind);
+    this.el = el;
+    $('route').appendChild(el);
+    items.push(this);
+    this.place();
+  }
+  Item.prototype.place = function () {
+    this.el.style.left = Math.round(this.x - 4.5) + 'px';
+    this.el.style.bottom = Math.round(G.ground + this.y - 1) + 'px';
+  };
+  // Let go of it wherever it is; it drops to the ground and anyone hungry can have it.
+  Item.prototype.fall = function () {
+    var self = this;
+    this.holder = null; this.claim = null; this.landed = false;
+    this.x = clamp(this.x, G.minX + 6, G.w - G.right - 6);
+    void this.el.offsetWidth;   // start the transition from where it is now
+    this.el.classList.add('falling');
+    this.y = 0; this.place();
+    setTimeout(function () { self.el.classList.remove('falling'); self.landed = true; }, 380);
+  };
+  Item.prototype.bite = function () {
+    this.bites++;
+    this.el.style.transform = 'scale(' + Math.max(0.3, 1 - this.bites * 0.25) + ')';
+  };
+  Item.prototype.remove = function () {
+    this.gone = true;
+    this.el.remove();
+    items = items.filter(function (i) { return i !== this; }, this);
+  };
+  Walker.prototype.dropFood = function () {
+    var it = this.food;
+    this.food = null;
+    if (!it || it.gone) { return; }
+    if (it.holder === this || it.claim === this) { it.fall(); }
+  };
+  Walker.prototype.lift = function (it) { this.food = it; it.holder = this; it.claim = this; this.draw(); };
+
+  // Found one: show it off, then share it, offer it to you, or eat it.
+  Walker.prototype.forage = function () {
+    var self = this, it = new Item(randomFood(), this.center() + (this.dir > 0 ? 8 : -8));
+    it.claim = this; this.food = it;
+    this.seq++;
+    this.mode = 'act'; this.face = ROW_DOWN;
+    this.emote('bang');
+    this.later(0.7, function () {
+      self.lift(it);
+      self.play('Hop', ROW_DOWN, { done: function () {
+        self.hold();
+        var friends = walkers.filter(function (w) { return w !== self && free(w); });
+        var r = Math.random();
+        if (friends.length && r < 0.45) {
+          friends.sort(function (a, b) { return Math.abs(a.center() - self.center()) - Math.abs(b.center() - self.center()); });
+          self.share(friends[0]);
+        } else if (r < 0.8) { self.offer(); } else { self.eatAlone(); }
+      } });
+    });
+  };
+  Walker.prototype.share = function (f) {
+    var self = this, it = this.food;
+    f.seq++; f.mode = 'act'; f.anim = null; f.y = 0;
+    this.partner = f; f.partner = this;
+    var side = f.center() > this.center() ? -1 : 1;   // which side of f the giver stands on
+    var gap = (this.m.fw + f.m.fw) * 0.3 + 4;
+    f.face = side < 0 ? ROW_LEFT : ROW_RIGHT;
+    f.hold();
+    f.emote('bang');
+    this.walkTo(f.center() + side * gap - this.m.fw / 2, this.speed * 1.4, function () {
+      self.face = side < 0 ? ROW_RIGHT : ROW_LEFT;
+      self.hold();
+      self.later(0.4, function () {
+        it.holder = null; it.x = (self.center() + f.center()) / 2; it.y = 0; it.place();
+        f.food = it;
+        self.emote('heart');
+        self.later(0.5, function () { feast([self, f], it); });
+      });
+    });
+  };
+  // Hold it up to you and wait; click it to take the gift.
+  Walker.prototype.offer = function () {
+    this.mode = 'gift'; this.face = ROW_DOWN;
+    this.timer = rand(9, 12); this.hopIn = 0.3;
+    this.emote('heart');
+    this.hold();
+  };
+  Walker.prototype.acceptGift = function () {
+    var self = this, it = this.food;
+    this.seq++;
+    this.mode = 'act'; this.food = null;
+    if (it) {
+      it.holder = null;
+      it.el.classList.add('taken');
+      setTimeout(function () { it.remove(); }, 600);
+    }
+    this.emote('heart', -5); this.emote('heart', 5);
+    this.sparkle(); this.sparkle();
+    this.affection = Math.min(10, this.affection + 2);
+    this.play('Hop', ROW_DOWN, { loops: 3, done: function () { self.settle(); } });
+  };
+  Walker.prototype.eatAlone = function () {
+    var it = this.food;
+    this.seq++;
+    this.mode = 'act'; this.face = ROW_DOWN;
+    if (!it) { this.settle(); return; }
+    it.holder = null; it.x = this.center() + 2; it.y = 0; it.place();
+    feast([this], it);
+  };
+  // Eat it (alone, or two together), a bite at a time, then a happy hop.
+  function feast(eaters, it) {
+    var a = eaters[0];
+    it.claim = a;
+    eaters.forEach(function (w) {
+      w.mode = 'act'; w.food = it;
+      w.play('Eat', w.face != null ? w.face : ROW_DOWN, { loops: 3, done: function () { w.hold(); } });
+    });
+    a.later(0.4, function () { it.bite(); });
+    a.later(0.8, function () { it.bite(); });
+    a.later(1.2, function () { it.bite(); });
+    a.later(1.5, function () {
+      it.remove();
+      eaters.forEach(function (w) {
+        w.food = null;
+        w.affection = Math.min(10, w.affection + 1);
+        w.emote('heart');
+        w.play('Hop', w.face != null ? w.face : ROW_DOWN, { done: function () { w.hold(); } });
+      });
+      a.later(0.8, function () {
+        if (eaters.length === 2) {
+          var L = eaters[0].center() <= eaters[1].center() ? eaters[0] : eaters[1];
+          part(L, L === eaters[0] ? eaters[1] : eaters[0], 'together');
+        } else { a.settle(); }
+      });
+    });
+  }
+  // Food lying on the ground: the nearest Pokémon that's free trots over and eats it.
+  Walker.prototype.goEat = function (it) {
+    var self = this;
+    this.seq++;
+    it.claim = this; this.food = it;
+    this.emote('bang');
+    this.walkTo(it.x - this.m.fw / 2, this.speed * 1.8, function () {
+      self.face = ROW_DOWN;
+      feast([self], it);
+    });
+  };
+  var seekIn = 0.5;
+  function seekFood(dt) {
+    seekIn -= dt;
+    if (seekIn > 0) { return; }
+    seekIn = 0.5;
+    items.forEach(function (it) {
+      if (it.gone || it.holder || it.claim || !it.landed) { return; }
+      var best = null;
+      walkers.forEach(function (w) {
+        if ((w.mode !== 'idle' && w.mode !== 'walk') || w.onArrive || w.hover || w.food) { return; }
+        if (!best || Math.abs(w.center() - it.x) < Math.abs(best.center() - it.x)) { best = w; }
+      });
+      if (best) { best.goEat(it); }
+    });
+  }
+
+  // You feed them: click the berry badge to toss one in, or drag it to where you want it.
+  function dropFoodAt(x, y) {
+    var it = new Item(randomFood(), clamp(x, G.minX + 6, G.w - G.right - 6), y);
+    it.fall();
+    return it;
+  }
+
+  // ---- Evolution: rare, and likelier for a Pokémon you've petted, gifted and fed.
+  var evoIn = 30;
+  function checkEvolutions(dt) {
+    evoIn -= dt;
+    if (evoIn > 0) { return; }
+    evoIn = 30;
+    walkers.forEach(function (w) {
+      if (w.busy() || w.onArrive || !w.evolvesInto().length) { return; }
+      if (Math.random() < (1 / 120) * (1 + w.affection * 0.6)) { w.evolve(); }
+    });
+  }
+  Walker.prototype.evolvesInto = function () {
+    return (evolutions[this.dex] || []).filter(function (d) { return fits(walk, d); });
+  };
+  Walker.prototype.setForm = function (dex, shiny) {
+    var c = this.center();
+    this.dex = dex; this.shiny = shiny;
+    this.base = SPR + (shiny ? 'shiny/' : '');
+    this.m = shiny ? walkShiny[dex] : walk[dex];
+    this.x = place(this.m, c - this.m.fw / 2);
+    this.sheetKey = '';
+    this.preload();
+    this.draw();
+  };
+  Walker.prototype.evolve = function () {
+    var opts = this.evolvesInto();
+    if (!opts.length) { return; }
+    var self = this, from = this.dex, wasShiny = this.shiny;
+    var to = opts[Math.floor(Math.random() * opts.length)];
+    var toShiny = wasShiny && fits(walkShiny, to);
+    this.breakUp(); this.dropFood();
+    this.seq++;
+    this.mode = 'evolve'; this.anim = null; this.face = ROW_DOWN; this.y = 0;
+    this.hideTag();
+    this.emote('bang');
+    // The classic flicker: a white silhouette swapping between the two forms, faster and faster.
+    var gaps = [0.9, 0.45, 0.4, 0.34, 0.28, 0.22, 0.18, 0.14, 0.12, 0.1, 0.08, 0.08, 0.07, 0.07, 0.06, 0.06], t = 0.5;
+    this.later(0.5, function () { self.el.classList.add('evolving'); });
+    gaps.forEach(function (g, k) {
+      t += g;
+      self.later(t, function () { if (k % 2) { self.setForm(from, wasShiny); } else { self.setForm(to, toShiny); } });
+    });
+    this.later(t + 0.5, function () {
+      self.setForm(to, toShiny);
+      self.el.classList.remove('evolving');
+      for (var s = 0; s < 10; s++) { setTimeout(function () { if (!self.gone) { self.sparkle(); } }, s * 90); }
+      var tag = document.createElement('span');
+      tag.className = 'shinyTag';
+      // The pixel font has no arrow, so that one character uses the system font.
+      var arrow = document.createElement('span');
+      arrow.textContent = '→';
+      arrow.style.fontFamily = 'system-ui, sans-serif';
+      tag.append((names[from] || '#' + from).toUpperCase() + ' ', arrow, ' ' + (names[to] || '#' + to).toUpperCase());
+      tag.style.color = state.accent;
+      $('route').appendChild(tag);
+      tag.style.left = Math.round(clamp(self.center() - tag.offsetWidth / 2, 2, G.w - tag.offsetWidth - 2)) + 'px';
+      setTimeout(function () { tag.style.opacity = '0'; }, 4000);
+      setTimeout(function () { tag.remove(); }, 5000);
+      self.affection = 0;
+      self.mode = 'act';
+      self.emote('star');
+      self.play('Hop', ROW_DOWN, { loops: 2, done: function () { self.settle(); } });
+    });
+  };
+
+  // ---- Fainting: the loser of a fight sometimes collapses for good. A little ghost floats up,
+  // it fades away, and a new Pokémon wanders in a few seconds later.
+  Walker.prototype.faint = function (winner) {
+    var self = this;
+    this.partner = null;
+    if (winner) {
+      winner.partner = null;
+      winner.later(2.8, function () { winner.emote('sweat'); });
+      winner.later(3.6, function () { winner.resume(); winner.walkTo(winner.center() < G.w / 2 ? G.minX : maxXFor(winner.m.fw)); });
+    }
+    this.dropFood();
+    this.hideTag();
+    this.seq++;
+    this.mode = 'faint'; this.face = ROW_DOWN; this.y = 0;
+    this.emote('swirl');
+    var down = this.m.anims && this.m.anims.Faint ? 'Faint' : 'Sleep';
+    this.play('Hurt', ROW_DOWN, { loops: 3, done: function () {
+      self.play(down, ROW_DOWN, { keep: true });
+    } });
+    this.later(1.8, function () {
+      var g = document.createElement('span');
+      g.className = 'spirit';
+      g.innerHTML = icon('ghost');
+      g.style.left = Math.round(self.center() - 3.5) + 'px';
+      g.style.bottom = Math.round(G.ground + self.m.h * 0.5) + 'px';
+      $('route').appendChild(g);
+      setTimeout(function () { g.remove(); }, 2700);
+    });
+    this.later(2.4, function () { self.el.style.transition = 'opacity 1.6s ease'; self.el.style.opacity = '0'; });
+    this.later(rand(6, 9), function () {
+      var i = walkers.indexOf(self);
+      self.remove();
+      if (i < 0) { return; }
+      var dex = randomDex(walkers.map(function (w) { return w.dex; }), false);
+      if (dex == null) { walkers.splice(i, 1); return; }
+      walkers[i] = spawn(dex, Math.random() < 0.5 ? G.minX : G.w);   // arrives from one end of the route
+    });
+  };
+
   // ---- Meetings: when two walkers cross paths they sometimes stop and have a moment.
   var MOODS = ['love', 'friends', 'fun', 'angry', 'fight'];
   var meetCool = rand(4, 8);
@@ -902,7 +1318,7 @@
       }
     }
   }
-  function free(w) { return (w.mode === 'walk' || w.mode === 'idle') && w.cool <= 0 && !w.hover; }
+  function free(w) { return (w.mode === 'walk' || w.mode === 'idle') && w.cool <= 0 && !w.hover && !w.onArrive; }
   function meet(a, b, mood) {
     var L = a.center() <= b.center() ? a : b, R = L === a ? b : a;
     var gap = (L.m.fw + R.m.fw) * 0.3 + 4, mid = (L.center() + R.center()) / 2;
@@ -981,6 +1397,12 @@
       }
       function finish() {
         var loser = Math.random() < 0.5 ? L : R, winner = loser === L ? R : L;
+        if (Math.random() < 0.25) {   // this time it doesn't get up
+          winner.emote('star');
+          winner.play('Hop', winner.face, { done: function () { winner.hold(); } });
+          loser.faint(winner);
+          return;
+        }
         loser.emote('swirl');
         loser.play('Hurt', loser.face, { loops: 2, done: function () { loser.hold(); } });
         winner.emote('star');
@@ -1101,6 +1523,10 @@
       g.style.bottom = (G.ground - 1) + 'px';
     });
     var bs = G.ballSize || 44;
+    $('berry').style.display = G.ball ? 'flex' : 'none';
+    $('berry').style.left = (4 + bs - 13) + 'px';
+    $('berry').style.bottom = Math.max(1, G.h / 2 - bs / 2 - 5) + 'px';
+    items.slice().forEach(function (it) { it.remove(); });
     $('ball').style.display = G.ball ? 'flex' : 'none';
     $('ball').style.width = bs + 'px';
     $('ball').style.height = bs + 'px';
@@ -1116,7 +1542,7 @@
     $('zzz').style.right = (ss + (G.open ? 2 : 10)) + 'px';
 
     if (!Object.keys(walk).length) { return; }
-    var keep = walkers.filter(function (w) { return fits(w.shiny ? walkShiny : walk, w.dex); }).slice(0, G.count);
+    var keep = walkers.filter(function (w) { return w.mode !== 'faint' && fits(w.shiny ? walkShiny : walk, w.dex); }).slice(0, G.count);
     walkers.forEach(function (w) { if (keep.indexOf(w) < 0) { w.el.remove(); } });
     walkers = keep;
     if (press) { endPress(); }
@@ -1142,11 +1568,19 @@
     last = t;
     for (var i = 0; i < walkers.length; i++) { walkers[i].step(dt); }
     if (walkers.length > 1) { checkMeetings(dt); }
+    seekFood(dt);
+    checkEvolutions(dt);
     requestAnimationFrame(tick);
   }
   requestAnimationFrame(tick);
 
   $('snorlax').src = gif(143);
+  $('berry').innerHTML = foodSvg('berry');
+  $('berry').addEventListener('mousedown', function (e) {
+    if (e.button !== 0) { return; }
+    e.preventDefault();
+    press = { food: true, kind: randomFood(), x0: e.clientX, y0: e.clientY, it: null };
+  });
   applyAccent();
   setSize('large');
 
@@ -1155,6 +1589,7 @@
       walk = w.normal || {};
       walkShiny = w.shiny || {};
       names = w.names || {};
+      evolutions = w.evolutions || {};
       setRoster([133, 54, 1]);   // the design's opening roster: Eevee, Psyduck, Bulbasaur
     },
     setSize: setSize,

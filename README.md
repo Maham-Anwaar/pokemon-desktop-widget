@@ -28,6 +28,9 @@ Switch between four sizes from the menu bar icon (**◎ → Size**).
 - **System HP.** Free memory as an HP bar (Jigglypuff, Psyduck or Gastly depending on how it's doing), plus CPU, disk and battery.
 - **Walking Pokémon.** Real 8-direction walk cycles: they wander, turn around and pause. Click the Poké Ball to shuffle in new ones from all 386 Gen 1–3 Pokémon. Snorlax naps on the right.
 - **Play with them.** Hover over a Pokémon to see its name and it stops to look at you. Click to pet it: it hops and shows a heart (pet it too much and it gets cross and stomps off). Drag it to pick it up and drop it somewhere else along the route. When two of them cross paths they sometimes stop for a moment: falling in love, hopping together as friends, spinning around for fun, glaring at each other, or having a quick fight. Poke Snorlax and it stirs; poke it a lot and it startles everyone.
+- **A life of their own.** Now and then a Pokémon curls up for a nap (more often late at night; click it to wake it), spins around for fun, or finds a berry or an apple. It might share the snack with a friend, eat it itself, or hold it up and offer it to you: click it to accept the gift.
+- **Feed them.** Click the berry badge by the Poké Ball to toss a berry or apple onto the route, or drag it to exactly where you want it. The nearest Pokémon trots over and eats it.
+- **Evolutions.** Every so often a Pokémon that can evolve does, with the classic white flicker between forms. It's rare, but a Pokémon you've petted, given gifts and fed is much likelier to evolve.
 - **Shinies.** Every Pokémon that arrives has a 1-in-64 chance of being shiny (configurable). Visitors rotate every few minutes, shinies arrive with sparkles, and the menu keeps a log of every shiny you've spotted.
 
 ## Requirements
@@ -47,7 +50,7 @@ cd pokemon-desktop-widget
 
 ### 2. Download the sprites
 
-Sprites aren't included in this repo (they're Nintendo's artwork). This script downloads them for Gen 1–3 (#1–386) into `~/Documents/Pokemon Widget/sprites` (about 125 MB, including the extra animations the Pokémon use when you play with them):
+Sprites aren't included in this repo (they're Nintendo's artwork). This script downloads them for Gen 1–3 (#1–386) into `~/Documents/Pokemon Widget/sprites` (about 130 MB, including the extra animations the Pokémon use when you play with them, and who evolves into whom):
 
 ```bash
 ./fetch_sprites.sh

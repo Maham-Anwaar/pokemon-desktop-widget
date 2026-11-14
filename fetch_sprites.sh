@@ -8,9 +8,10 @@
 #   anim/<Name>/<dex>.png extra animation sheets used when you play with the walkers
 #   shiny/anim/<Name>/<dex>.png  the same, shiny (where drawn)
 #   names.json            dex number -> name
+#   evolutions.json       dex number -> the dex numbers it can evolve into (within #1-386)
 set -uo pipefail
 OUT="${1:-$HOME/Documents/Pokemon Widget/sprites}"
-ANIMS=(Idle Hop Attack Hurt Charge Rotate)
+ANIMS=(Idle Hop Attack Hurt Charge Rotate Sleep Eat Wake Faint)
 mkdir -p "$OUT/bw" "$OUT/walk" "$OUT/shiny/bw" "$OUT/shiny/walk"
 for a in $ANIMS; do mkdir -p "$OUT/anim/$a" "$OUT/shiny/anim/$a"; done
 
@@ -39,4 +40,22 @@ done
 curl -s --fail --remove-on-error --retry 2 --max-time 30 --parallel --parallel-max 6 -K "$CFG" \
   -w '%{http_code} %{url}\n' | grep -v '^200 ' || true
 rm -f "$CFG"
+
+if [[ ! -s "$OUT/evolutions.json" ]]; then
+  EV=$(mktemp -d)
+  for n in {1..386}; do printf 'url = "https://pokeapi.co/api/v2/pokemon-species/%d/"\noutput = "%s/%d.json"\n' $n "$EV" $n; done > "$EV/cfg"
+  curl -s --fail --retry 2 --max-time 30 --parallel --parallel-max 8 -K "$EV/cfg" || true
+  /usr/bin/python3 -I - "$EV" > "$OUT/evolutions.json.tmp" <<'PY'
+import glob, json, os, re, sys
+ev = {}
+for f in glob.glob(os.path.join(sys.argv[1], "*.json")):
+    d = json.load(open(f))
+    src = d.get("evolves_from_species")
+    if src and d["id"] <= 386:
+        ev.setdefault(re.search(r"/(\d+)/$", src["url"]).group(1), []).append(d["id"])
+print(json.dumps({k: sorted(v) for k, v in ev.items()}, indent=1, sort_keys=True))
+PY
+  [[ -s "$OUT/evolutions.json.tmp" ]] && mv "$OUT/evolutions.json.tmp" "$OUT/evolutions.json"
+  rm -rf "$EV" "$OUT/evolutions.json.tmp"
+fi
 echo DONE

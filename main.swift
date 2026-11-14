@@ -180,7 +180,7 @@ final class Vitals {
 // MARK: - Walk-sheet metadata
 
 /// Extra animations the walkers use when you play with them (see fetch_sprites.sh).
-let extraAnims = ["Idle", "Hop", "Attack", "Hurt", "Charge", "Rotate"]
+let extraAnims = ["Idle", "Hop", "Attack", "Hurt", "Charge", "Rotate", "Sleep", "Eat", "Wake", "Faint"]
 
 /// Every <Anim> in an AnimData.xml: name -> ["fw", "fh", "durs", "hit"?, "src"], with CopyOf resolved
 /// ("src" is the animation whose sheet holds the frames).
@@ -250,21 +250,30 @@ func loadWalkData(_ walkDir: URL, animDir: URL) -> [String: Any] {
         }
         guard let side = bounds(row: 2), let down = bounds(row: 0) else { continue }
         // Extra sheets share the walk sheet's anchor (the frame centre), so they need no pixel scan,
-        // just a check that the sheet is there with all eight direction rows.
+        // just a check that the sheet is there: eight direction rows, or one (Sleep and Eat face the viewer).
         var anims: [String: Any] = [:]
         for name in extraAnims {
             guard let a = parsed[name], let afh = a["fh"] as? Int, let srcName = a["src"] as? String else { continue }
             let url = animDir.appendingPathComponent("\(srcName)/\(dex).png")
             guard let isrc = CGImageSourceCreateWithURL(url as CFURL, nil),
                   let props = CGImageSourceCopyPropertiesAtIndex(isrc, 0, nil) as? [CFString: Any],
-                  let ph = props[kCGImagePropertyPixelHeight] as? Int, ph >= afh * 8 else { continue }
-            anims[name] = a
+                  let ph = props[kCGImagePropertyPixelHeight] as? Int, ph >= afh else { continue }
+            var info = a
+            info["rows"] = ph >= afh * 8 ? 8 : 1
+            anims[name] = info
         }
         out[String(dex)] = ["fw": fw, "fh": fh, "durs": durs,
                             "padSide": fh - 1 - side.bottom, "padDown": fh - 1 - down.bottom,
                             "h": side.bottom - side.top + 1, "anims": anims]
     }
     return out
+}
+
+/// dex -> the dex numbers it can evolve into (written by fetch_sprites.sh).
+func loadEvolutions() -> [String: [Int]] {
+    guard let data = try? Data(contentsOf: spritesDir.appendingPathComponent("evolutions.json")),
+          let d = try? JSONSerialization.jsonObject(with: data) as? [String: [Int]] else { return [:] }
+    return d
 }
 
 // MARK: - Data sources
@@ -768,6 +777,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
                     "shiny": loadWalkData(spritesDir.appendingPathComponent("shiny/walk"),
                                           animDir: spritesDir.appendingPathComponent("shiny/anim")),
                     "names": Dictionary(uniqueKeysWithValues: (1...386).map { (String($0), displayName($0)) }),
+                    "evolutions": loadEvolutions(),
                 ]
                 DispatchQueue.main.async { self?.send("pw.setWalk", w) }
             }
