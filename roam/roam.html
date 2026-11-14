@@ -226,7 +226,7 @@
   Mon.prototype.whim = function () {
     var self = this, r = Math.random();
     if (this.flyer && this.grounded && this.groundFor <= 0) { this.takeOff(); return; }
-    var h = new Date().getHours(), sleepy = h >= 22 || h < 6 ? 0.16 : 0.06;
+    var h = new Date().getHours(), sleepy = h >= 22 || h < 6 ? 0.05 : 0.02;   // a little sleepier at night
     if (r < 0.5) { this.walkTo(this.x + rand(-1, 1) * rand(80, 420) * S / 2); return; }
     r -= 0.5;
     if (r < 0.12) {
@@ -238,7 +238,7 @@
     r -= 0.12;
     if (r < 0.1) { this.leap(); return; }
     r -= 0.1;
-    if (r < sleepy) { this.sleep(rand(10, 30)); return; }
+    if (r < sleepy) { this.sleep(rand(8, 18)); return; }
     r -= sleepy;
     if (r < 0.06) {
       this.seq++; this.mode = 'act';

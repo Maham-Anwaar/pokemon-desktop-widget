@@ -2,16 +2,16 @@ import Cocoa
 import WebKit
 import ServiceManagement
 
-// Pokémon Roam: a crowd of pixel Pokémon living on your whole screen. Each display gets a
-// transparent, click-through window; walkers stroll along the bottom (just above the Dock) and
-// flyers cross the sky. They can't take clicks, so they react to where your cursor is instead.
+// Pokémon Roam: a crowd of pixel Pokémon living on your desktop. Each display gets a transparent,
+// click-through window on the desktop layer (behind all your windows); walkers stroll along the
+// bottom (just above the Dock) and flyers cross the sky. They can't take clicks, so they react to
+// where your cursor is instead.
 
 let roamConfigURL = baseDir.appendingPathComponent("roam.json")
 
 struct RoamSettings: Codable {
     var count = 15          // Pokémon across all displays
     var scale = 2           // sprite pixels per screen point
-    var onTop = true        // above your windows (false: on the desktop, behind them)
     var paused = false
 
     static func load() -> RoamSettings {
@@ -53,7 +53,9 @@ final class Stage: NSObject, WKScriptMessageHandler {
         window.hasShadow = false
         window.ignoresMouseEvents = true
         window.isReleasedWhenClosed = false
-        window.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
+        window.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
+        // Just above the desktop icons and below every window: they only show on the desktop.
+        window.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopIconWindow)) + 1)
         web.autoresizingMask = [.width, .height]
         web.setValue(false, forKey: "drawsBackground")
         web.underPageBackgroundColor = .clear
@@ -63,9 +65,6 @@ final class Stage: NSObject, WKScriptMessageHandler {
         window.orderFrontRegardless()
     }
 
-    func setLevel(onTop: Bool) {
-        window.level = onTop ? .floating : NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopIconWindow)) + 1)
-    }
 
     func call(_ fn: String, _ obj: Any) {
         guard ready, let data = try? JSONSerialization.data(withJSONObject: obj, options: [.fragmentsAllowed]),
@@ -121,7 +120,6 @@ final class RoamApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         stages.forEach { $0.close() }
         stages = NSScreen.screens.map { screen in
             let st = Stage(screen: screen)
-            st.setLevel(onTop: settings.onTop)
             st.onReady = { [weak self] st in self?.start(st) }
             return st
         }
@@ -189,7 +187,6 @@ final class RoamApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         for (t, s) in [("Small", 1), ("Medium", 2), ("Large", 3)] { sizes.addItem(item(t, #selector(setScale(_:)), s, on: settings.scale == s)) }
         sizeItem.submenu = sizes
         menu.addItem(sizeItem)
-        menu.addItem(item("Above windows", #selector(toggleOnTop), on: settings.onTop))
         menu.addItem(item("Open at login", #selector(toggleLogin), on: SMAppService.mainApp.status == .enabled))
         menu.addItem(.separator())
         menu.addItem(item("Quit Pokémon Roam", #selector(quit)))
@@ -207,10 +204,6 @@ final class RoamApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc func setScale(_ sender: NSMenuItem) {
         settings.scale = sender.tag; settings.save()
         stages.forEach { $0.call("setScale", settings.scale) }
-    }
-    @objc func toggleOnTop() {
-        settings.onTop.toggle(); settings.save()
-        stages.forEach { $0.setLevel(onTop: settings.onTop) }
     }
     @objc func toggleLogin() {
         let svc = SMAppService.mainApp

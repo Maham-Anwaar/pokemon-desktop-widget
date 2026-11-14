@@ -968,7 +968,7 @@
   // ---- Whims: now and then, instead of wandering on, a walker naps, spins or finds a snack.
   Walker.prototype.whim = function () {
     var h = new Date().getHours(), night = h >= 22 || h < 6;
-    var r = Math.random(), pSleep = night ? 0.12 : 0.03;
+    var r = Math.random(), pSleep = night ? 0.05 : 0.02;
     if (r < pSleep) { this.sleep(); return true; }
     r -= pSleep;
     if (r < 0.04) { this.spin(); return true; }
@@ -979,7 +979,7 @@
   Walker.prototype.sleep = function (sec) {
     this.seq++;
     this.mode = 'sleep'; this.face = ROW_DOWN; this.y = 0;
-    this.timer = sec || rand(15, 40); this.zIn = rand(0.4, 1.2);
+    this.timer = sec || rand(12, 25); this.zIn = rand(0.4, 1.2);
     this.play('Sleep', ROW_DOWN, { loops: Infinity });
   };
   Walker.prototype.wake = function (startled) {

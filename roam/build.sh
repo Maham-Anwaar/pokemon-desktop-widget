@@ -13,7 +13,7 @@ xcrun swiftc -O -sdk "$(xcrun --show-sdk-path --sdk macosx)" -target "$(uname -m
   main.swift ../sprites.swift -o "$APP/Contents/MacOS/PokemonRoam"
 
 cp roam.html "$APP/Contents/Resources/"
-cp ../AppIcon.icns "$APP/Contents/Resources/"
+cp AppIcon.icns "$APP/Contents/Resources/"
 
 cat > "$APP/Contents/Info.plist" <<'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
