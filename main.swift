@@ -179,27 +179,49 @@ final class Vitals {
 
 // MARK: - Walk-sheet metadata
 
-func loadWalkData(_ walkDir: URL) -> [String: Any] {
+/// Extra animations the walkers use when you play with them (see fetch_sprites.sh).
+let extraAnims = ["Idle", "Hop", "Attack", "Hurt", "Charge", "Rotate"]
+
+/// Every <Anim> in an AnimData.xml: name -> ["fw", "fh", "durs", "hit"?, "src"], with CopyOf resolved
+/// ("src" is the animation whose sheet holds the frames).
+let animTagRes: [String: NSRegularExpression] = Dictionary(uniqueKeysWithValues:
+    ["Name", "CopyOf", "FrameWidth", "FrameHeight", "Duration", "HitFrame"].map {
+        ($0, try! NSRegularExpression(pattern: "<\($0)>([^<]*)</\($0)>"))
+    })
+
+func parseAnims(_ xml: String) -> [String: [String: Any]] {
+    func values(_ s: String, _ tag: String) -> [String] {
+        let re = animTagRes[tag]!
+        let ns = s as NSString
+        return re.matches(in: s, range: NSRange(location: 0, length: ns.length)).map { ns.substring(with: $0.range(at: 1)) }
+    }
+    var own: [String: [String: Any]] = [:], copies: [String: String] = [:]
+    for block in xml.components(separatedBy: "<Anim>").dropFirst() {
+        guard let name = values(block, "Name").first else { continue }
+        if let src = values(block, "CopyOf").first { copies[name] = src; continue }
+        guard let fw = values(block, "FrameWidth").first.flatMap({ Int($0) }),
+              let fh = values(block, "FrameHeight").first.flatMap({ Int($0) }) else { continue }
+        let durs = values(block, "Duration").compactMap { Int($0) }
+        guard !durs.isEmpty else { continue }
+        var a: [String: Any] = ["fw": fw, "fh": fh, "durs": durs, "src": name]
+        if let hit = values(block, "HitFrame").first.flatMap({ Int($0) }) { a["hit"] = hit }
+        own[name] = a
+    }
+    var out = own
+    for (name, src) in copies { if let a = own[src] { out[name] = a } }
+    return out
+}
+
+func loadWalkData(_ walkDir: URL, animDir: URL) -> [String: Any] {
     var out: [String: Any] = [:]
-    let numRe = { (tag: String) in try! NSRegularExpression(pattern: "<\(tag)>(\\d+)</\(tag)>") }
-    let fwRe = numRe("FrameWidth"), fhRe = numRe("FrameHeight"), durRe = numRe("Duration")
 
     for dex in 1...386 {
         let xmlURL = walkDir.appendingPathComponent("\(dex).xml")
         let pngURL = walkDir.appendingPathComponent("\(dex).png")
-        guard let xml = try? String(contentsOf: xmlURL, encoding: .utf8),
-              let start = xml.range(of: "<Name>Walk</Name>"),
-              let end = xml.range(of: "</Anim>", range: start.upperBound..<xml.endIndex) else { continue }
-        let block = String(xml[start.upperBound..<end.lowerBound])
-        let ns = block as NSString
-        func first(_ re: NSRegularExpression) -> Int? {
-            guard let m = re.firstMatch(in: block, range: NSRange(location: 0, length: ns.length)) else { return nil }
-            return Int(ns.substring(with: m.range(at: 1)))
-        }
-        guard let fw = first(fwRe), let fh = first(fhRe) else { continue }
-        let durs = durRe.matches(in: block, range: NSRange(location: 0, length: ns.length))
-            .compactMap { Int(ns.substring(with: $0.range(at: 1))) }
-        guard !durs.isEmpty,
+        guard let xml = try? String(contentsOf: xmlURL, encoding: .utf8) else { continue }
+        let parsed = parseAnims(xml)
+        guard let walkAnim = parsed["Walk"], let fw = walkAnim["fw"] as? Int, let fh = walkAnim["fh"] as? Int,
+              let durs = walkAnim["durs"] as? [Int],
               let src = CGImageSourceCreateWithURL(pngURL as CFURL, nil),
               let img = CGImageSourceCreateImageAtIndex(src, 0, nil) else { continue }
 
@@ -227,9 +249,20 @@ func loadWalkData(_ walkDir: URL) -> [String: Any] {
             return bottom >= 0 ? (top, bottom) : nil
         }
         guard let side = bounds(row: 2), let down = bounds(row: 0) else { continue }
+        // Extra sheets share the walk sheet's anchor (the frame centre), so they need no pixel scan,
+        // just a check that the sheet is there with all eight direction rows.
+        var anims: [String: Any] = [:]
+        for name in extraAnims {
+            guard let a = parsed[name], let afh = a["fh"] as? Int, let srcName = a["src"] as? String else { continue }
+            let url = animDir.appendingPathComponent("\(srcName)/\(dex).png")
+            guard let isrc = CGImageSourceCreateWithURL(url as CFURL, nil),
+                  let props = CGImageSourceCopyPropertiesAtIndex(isrc, 0, nil) as? [CFString: Any],
+                  let ph = props[kCGImagePropertyPixelHeight] as? Int, ph >= afh * 8 else { continue }
+            anims[name] = a
+        }
         out[String(dex)] = ["fw": fw, "fh": fh, "durs": durs,
                             "padSide": fh - 1 - side.bottom, "padDown": fh - 1 - down.bottom,
-                            "h": side.bottom - side.top + 1]
+                            "h": side.bottom - side.top + 1, "anims": anims]
     }
     return out
 }
@@ -729,8 +762,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
             _ = vitals.cpuPct()
             pushAll()
             DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-                let w = ["normal": loadWalkData(spritesDir.appendingPathComponent("walk")),
-                         "shiny": loadWalkData(spritesDir.appendingPathComponent("shiny/walk"))]
+                let w: [String: Any] = [
+                    "normal": loadWalkData(spritesDir.appendingPathComponent("walk"),
+                                           animDir: spritesDir.appendingPathComponent("anim")),
+                    "shiny": loadWalkData(spritesDir.appendingPathComponent("shiny/walk"),
+                                          animDir: spritesDir.appendingPathComponent("shiny/anim")),
+                    "names": Dictionary(uniqueKeysWithValues: (1...386).map { (String($0), displayName($0)) }),
+                ]
                 DispatchQueue.main.async { self?.send("pw.setWalk", w) }
             }
         case "shiny":

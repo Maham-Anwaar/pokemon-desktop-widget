@@ -23,7 +23,16 @@
   .ball { appearance: none; -webkit-appearance: none; border: 0; margin: 0; padding: 0; cursor: pointer; position: absolute; left: 4px; top: 50%; margin-top: -22px; width: 44px; height: 44px; border-radius: 12px; background: rgba(255,255,255,0.05); display: flex; align-items: center; justify-content: center; z-index: 5; }
   .ball:hover { filter: brightness(1.25); }
   .ball:active { transform: scale(0.94); }
-  .walker { position: absolute; left: 0; image-rendering: pixelated; background-repeat: no-repeat; will-change: transform; transition: opacity .7s ease; }
+  .walker { position: absolute; left: 0; image-rendering: pixelated; background-repeat: no-repeat; will-change: transform; transition: opacity .7s ease; cursor: grab; transform-origin: 50% 40%; }
+  body.grabbing, body.grabbing * { cursor: grabbing !important; }
+  #snorlax { cursor: pointer; }
+  @keyframes stir { 0%, 100% { transform: none; } 20% { transform: translateX(-2px) rotate(-5deg); } 40% { transform: translateX(2px) rotate(4deg); } 60% { transform: translate(-1px, -2px); } 80% { transform: translateX(1px); } }
+  #snorlax.stir { animation: stir .6s ease-in-out; }
+  .emote { position: absolute; pointer-events: none; z-index: 7; animation: emote 1.5s ease-out forwards; }
+  .emote svg { display: block; }
+  @keyframes emote { 0% { transform: translateY(3px) scale(.3); opacity: 0; } 14% { transform: translateY(0) scale(1.2); opacity: 1; } 24% { transform: scale(1); } 75% { opacity: 1; } 100% { transform: translateY(-9px); opacity: 0; } }
+  .nameTag { position: absolute; z-index: 7; pointer-events: none; font-family: Silkscreen, ui-monospace, monospace; font-size: 8px; letter-spacing: .5px; line-height: 10px; padding: 1px 4px; border-radius: 4px; background: rgba(10,14,19,.88); color: #E6ECF4; white-space: nowrap; box-shadow: 0 0 0 1px rgba(255,255,255,.08); }
+  .dust { position: absolute; width: 2px; height: 2px; background: #9AA7B8; pointer-events: none; z-index: 3; transition: transform .45s ease-out, opacity .45s ease-out; }
   @keyframes snooze { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
   .snooze { animation: snooze 3.4s ease-in-out infinite; }
   .sparkle { position: absolute; width: 7px; height: 7px; pointer-events: none; z-index: 4; animation: twinkle .9s ease-out forwards; }
@@ -276,12 +285,31 @@
     try { window.webkit.messageHandlers.native.postMessage(msg); } catch (e) {}
   }
 
-  // Drag the widget from anywhere that isn't a button.
+  // Drag the widget from anywhere that isn't a button, a Pokémon or Snorlax.
   document.addEventListener('mousedown', function (e) {
     if (e.button !== 0) { return; }
-    if (e.target.closest('button')) { return; }
+    if (e.target.closest('button, #snorlax')) { return; }
+    var w = e.target.closest('.walker');
+    if (w && w.walker && !w.walker.gone) { e.preventDefault(); startPress(w.walker, e); return; }
     post({ type: 'drag' });
   });
+  // Press on a Pokémon: a click pets it, a drag picks it up.
+  document.addEventListener('mousemove', function (e) {
+    if (!press) { return; }
+    if (!press.held) {
+      if (Math.abs(e.clientX - press.x0) + Math.abs(e.clientY - press.y0) < 4) { return; }
+      press.held = true;
+      press.w.pickUp();
+    }
+    press.w.carry(e);
+  });
+  document.addEventListener('mouseup', function () {
+    if (!press) { return; }
+    var p = press;
+    endPress();
+    if (p.held) { p.w.drop(); } else { p.w.pet(); }
+  });
+  window.addEventListener('blur', function () { if (press) { var p = press; endPress(); if (p.held) { p.w.drop(); } } });
 
   (function weekdays() {
     var html = '';
@@ -461,6 +489,7 @@
   var walk = {};          // dex -> {fw, fh, durs, padSide, padDown, h}
   var walkShiny = {};     // same, for the shiny sheets
   var walkers = [];
+  var names = {};         // dex -> display name
   var shinyOdds = 64;     // 1 in N spawns is shiny
   var ROW_DOWN = 0, ROW_RIGHT = 2, ROW_LEFT = 6;
 
@@ -479,32 +508,50 @@
   function rand(a, b) { return a + Math.random() * (b - a); }
   function maxXFor(fw) { return G.w - G.right - fw; }
 
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
   function Walker(dex, x, shiny, quiet) {
     var m = shiny ? walkShiny[dex] : walk[dex];
     this.dex = dex; this.m = m; this.shiny = !!shiny;
+    this.base = SPR + (shiny ? 'shiny/' : '');
     this.sparkleIn = rand(0.6, 2);
-    this.x = x; this.dir = Math.random() < 0.5 ? -1 : 1;
+    this.x = x; this.y = 0; this.vy = 0; this.tilt = 0;
+    this.dir = Math.random() < 0.5 ? -1 : 1;
     this.mode = 'idle'; this.timer = rand(0.3, 2.5);
     this.frame = 0; this.ft = 0;
-    this.speed = rand(14, 24);
+    this.speed = rand(14, 24); this.walkSpeed = this.speed;
+    this.anim = null; this.face = null; this.seq = 0; this.partner = null;
+    this.cool = rand(4, 10); this.pets = []; this.hover = false; this.tag = null;
     var el = document.createElement('div');
     el.className = 'walker';
-    el.style.width = m.fw + 'px';
-    el.style.height = m.fh + 'px';
-    el.style.backgroundImage = 'url(' + SPR + (shiny ? 'shiny/walk/' : 'walk/') + dex + '.png)';
     el.style.opacity = '0';
-    this.el = el;
+    el.walker = this;
+    this.el = el; this.sheetKey = '';
     $('route').insertBefore(el, $('snorlax'));
+    this.preload();
     this.draw();
+    var self = this;
+    el.addEventListener('mouseenter', function () { self.hoverIn(); });
+    el.addEventListener('mouseleave', function () { self.hoverOut(); });
     requestAnimationFrame(function () { el.style.opacity = '1'; });
     if (this.shiny && !quiet) { this.celebrate(); }
   }
+  Walker.prototype.center = function () { return this.x + this.m.fw / 2; };
+  Walker.prototype.preload = function () {
+    var a = this.m.anims || {}, self = this;
+    this.imgs = Object.keys(a).map(function (k) { var i = new Image(); i.src = self.base + 'anim/' + a[k].src + '/' + self.dex + '.png'; return i; });
+  };
+  // Runs fn after `sec` unless this walker has moved on to something else in the meantime.
+  Walker.prototype.later = function (sec, fn) {
+    var self = this, seq = this.seq;
+    setTimeout(function () { if (self.seq === seq && !self.gone) { fn(); } }, sec * 1000);
+  };
   Walker.prototype.sparkle = function () {
     var s = document.createElement('span');
     s.className = 'sparkle';
     s.style.color = Math.random() < 0.5 ? '#FFF6C2' : state.accent;
     s.style.left = Math.round(this.x + rand(-3, this.m.fw - 4)) + 'px';
-    s.style.bottom = Math.round(G.ground + rand(0, this.m.h + 6)) + 'px';
+    s.style.bottom = Math.round(G.ground + this.y + rand(0, this.m.h + 6)) + 'px';
     $('route').appendChild(s);
     setTimeout(function () { s.remove(); }, 950);
   };
@@ -521,26 +568,89 @@
     setTimeout(function () { tag.remove(); }, 6000);
     post({ type: 'shiny', dex: this.dex });
   };
+
+  // ---- Animations: the walker's own sheet for each one when downloaded, else its walk sheet with a stand-in motion.
+  Walker.prototype.sheetFor = function (name) {
+    var a = this.m.anims && this.m.anims[name];
+    if (a) {
+      return { url: this.base + 'anim/' + a.src + '/' + this.dex + '.png', fw: a.fw, fh: a.fh, durs: a.durs,
+               hit: a.hit != null ? a.hit : Math.floor(a.durs.length / 2) };
+    }
+    var durs = name === 'Idle' ? [40] : this.m.durs;
+    return { url: this.base + 'walk/' + this.dex + '.png', fw: this.m.fw, fh: this.m.fh, durs: durs,
+             hit: Math.floor(durs.length / 2), fake: name };
+  };
+  // Play `name` facing `row`. opts: loops (Infinity holds it until something else plays), hit(), done().
+  Walker.prototype.play = function (name, row, opts) {
+    opts = opts || {};
+    var s = this.sheetFor(name), total = 0;
+    s.durs.forEach(function (d) { total += d; });
+    this.anim = { s: s, row: row, frame: 0, ft: 0, t: 0, total: total, loops: opts.loops || 1, hit: opts.hit, done: opts.done };
+  };
+  Walker.prototype.stepAnim = function (dt) {
+    var a = this.anim;
+    a.ft += dt * 60; a.t += dt * 60;
+    while (this.anim === a && a.ft >= a.s.durs[a.frame]) {
+      a.ft -= a.s.durs[a.frame];
+      a.frame++;
+      if (a.hit && a.frame === a.s.hit) { a.hit(); }
+      if (this.anim !== a) { break; }
+      if (a.frame >= a.s.durs.length) {
+        if (--a.loops > 0) { a.frame = 0; a.t = 0; }
+        else { a.frame = a.s.durs.length - 1; this.anim = null; if (a.done) { a.done(); } }
+      }
+    }
+  };
+  Walker.prototype.hold = function () { this.play('Idle', this.face != null ? this.face : ROW_DOWN, { loops: Infinity }); };
+
+  // ---- Behaviour states: idle / walk (roaming), look (hovered), act (scripted), held, fall.
+  Walker.prototype.resume = function (pause) {
+    this.seq++;
+    this.anim = null; this.partner = null; this.face = null;
+    this.mode = 'idle'; this.timer = pause != null ? pause : rand(0.6, 2);
+    this.frame = 0; this.y = 0; this.vy = 0; this.tilt = 0; this.walkSpeed = this.speed;
+    this.el.style.zIndex = '';
+  };
+  Walker.prototype.walkTo = function (x, speed) {
+    var t = Math.round(place(this.m, x));
+    if (Math.abs(t - this.x) < 4) { return; }
+    this.target = t; this.dir = t > this.x ? 1 : -1;
+    this.mode = 'walk'; this.frame = 0; this.ft = 0; this.anim = null; this.face = null;
+    this.walkSpeed = speed || this.speed;
+  };
+  // Leave whatever scene this walker shares with another (the other one goes back to roaming).
+  Walker.prototype.breakUp = function () {
+    var p = this.partner;
+    if (!p) { return; }
+    this.partner = null; p.partner = null;
+    if (p.mode === 'act') { p.resume(rand(0.3, 1)); }
+  };
+  Walker.prototype.busy = function () { return this.mode === 'act' || this.mode === 'held' || this.mode === 'fall'; };
   Walker.prototype.step = function (dt) {
     if (this.shiny) {
       this.sparkleIn -= dt;
       if (this.sparkleIn <= 0) { this.sparkle(); this.sparkleIn = rand(0.8, 2.4); }
     }
-    if (this.mode === 'idle') {
+    this.cool -= dt;
+    if (this.anim) { this.stepAnim(dt); }
+    if (this.mode === 'held') {
+      this.tilt *= Math.pow(0.03, dt);
+    } else if (this.mode === 'fall') {
+      this.fall(dt);
+    } else if (this.mode === 'idle') {
       this.timer -= dt;
       if (this.timer <= 0) {
         var lo = G.minX, hi = maxXFor(this.m.fw);
-        this.target = Math.round(rand(lo, hi));
-        if (Math.abs(this.target - this.x) < 20) { this.target = this.x < (lo + hi) / 2 ? hi : lo; }
-        this.dir = this.target > this.x ? 1 : -1;
-        this.mode = 'walk'; this.frame = 0; this.ft = 0;
+        var t = Math.round(rand(lo, hi));
+        if (Math.abs(t - this.x) < 20) { t = this.x < (lo + hi) / 2 ? hi : lo; }
+        this.walkTo(t);
       }
-    } else {
-      this.x += this.dir * this.speed * dt;
+    } else if (this.mode === 'walk') {
+      this.x += this.dir * this.walkSpeed * dt;
       if ((this.dir > 0 && this.x >= this.target) || (this.dir < 0 && this.x <= this.target)) {
-        this.x = this.target; this.mode = 'idle'; this.timer = rand(1.2, 4.5); this.frame = 0;
+        this.x = this.target; this.mode = 'idle'; this.timer = rand(1.2, 4.5); this.frame = 0; this.walkSpeed = this.speed;
       } else {
-        this.ft += dt * 60;
+        this.ft += dt * 60 * Math.max(1, this.walkSpeed / this.speed);
         while (this.ft >= this.m.durs[this.frame]) {
           this.ft -= this.m.durs[this.frame];
           this.frame = (this.frame + 1) % this.m.durs.length;
@@ -550,17 +660,336 @@
     this.draw();
   };
   Walker.prototype.draw = function () {
-    var m = this.m, row, pad;
-    if (this.mode === 'walk') { row = this.dir > 0 ? ROW_RIGHT : ROW_LEFT; pad = m.padSide; }
-    else { row = ROW_DOWN; pad = m.padDown; }
-    this.el.style.bottom = (G.ground - pad) + 'px';
-    this.el.style.backgroundPosition = (-this.frame * m.fw) + 'px ' + (-row * m.fh) + 'px';
-    this.el.style.transform = 'translateX(' + Math.round(this.x) + 'px)';
+    var m = this.m, a = this.anim, s = a ? a.s : m, row, frame, ox = 0, oy = 0;
+    if (a) { row = a.row; frame = a.frame; }
+    else if (this.mode === 'walk') { row = this.dir > 0 ? ROW_RIGHT : ROW_LEFT; frame = this.frame; }
+    else { row = this.face != null ? this.face : ROW_DOWN; frame = 0; }
+    if (a && s.fake) {
+      var p = Math.min(1, a.t / a.total), toward = row === ROW_LEFT ? -1 : 1;
+      if (s.fake === 'Hop') { oy = Math.sin(p * Math.PI) * 7; }
+      else if (s.fake === 'Hurt' || s.fake === 'Charge') { ox = frame % 2 ? 1 : -1; }
+      else if (s.fake === 'Attack') { ox = Math.sin(p * Math.PI) * 6 * toward; }
+      else if (s.fake === 'Rotate') { row = [0, 2, 4, 6][Math.floor(p * 8) % 4]; }
+      if (s.fake === 'Idle') { frame = 0; }
+    }
+    var url = a ? s.url : this.base + 'walk/' + this.dex + '.png';
+    var key = url + '|' + s.fw + '|' + s.fh;
+    if (this.sheetKey !== key) {
+      this.sheetKey = key;
+      this.el.style.width = s.fw + 'px';
+      this.el.style.height = s.fh + 'px';
+      this.el.style.backgroundImage = 'url(' + url + ')';
+    }
+    // Every sheet shares the walk sheet's anchor (the frame centre), so bigger frames just shift by half the difference.
+    var pad = (row === ROW_RIGHT || row === ROW_LEFT ? m.padSide : m.padDown) + (s.fh - m.fh) / 2;
+    this.el.style.bottom = Math.round(G.ground - pad + this.y + oy) + 'px';
+    this.el.style.backgroundPosition = (-frame * s.fw) + 'px ' + (-row * s.fh) + 'px';
+    this.el.style.transform = 'translateX(' + Math.round(this.x - (s.fw - m.fw) / 2 + ox) + 'px)' +
+      (Math.abs(this.tilt) > 0.5 ? ' rotate(' + this.tilt.toFixed(1) + 'deg)' : '');
+    if (this.tag) { this.placeTag(); }
   };
   Walker.prototype.remove = function () {
+    this.breakUp();
+    this.gone = true;
+    this.hideTag();
+    if (press && press.w === this) { endPress(); }
     var el = this.el;
     el.style.opacity = '0';
     setTimeout(function () { el.remove(); }, 750);
+  };
+
+  // ---- Little pixel icons that pop up over a Pokémon's head.
+  var ICONS = {
+    heart: { c: '#FF5C7C', p: ['.##.##.', '#######', '#######', '.#####.', '..###..', '...#...'] },
+    note:  { c: '#8FD3FF', p: ['..###', '..#.#', '..#..', '..#..', '###..', '###..'] },
+    anger: { c: '#FF4D3A', p: ['.#.#.', '##.##', '.....', '##.##', '.#.#.'] },
+    pow:   { c: '#FFE15A', p: ['...#...', '.#.#.#.', '..###..', '#######', '..###..', '.#.#.#.', '...#...'] },
+    bang:  { c: '#FFE15A', p: ['##', '##', '##', '..', '##'] },
+    swirl: { c: '#C9B6FF', p: ['.###.', '#...#', '#.#.#', '#..##', '.##..'] },
+    star:  { c: '#FFE15A', p: ['..#..', '.###.', '#####', '.###.', '.#.#.'] },
+    sweat: { c: '#7FC8FF', p: ['.#.', '##.', '###', '###', '.#.'] }
+  };
+  var iconSvg = {};
+  function icon(kind) {
+    if (iconSvg[kind]) { return iconSvg[kind]; }
+    var ic = ICONS[kind], w = ic.p[0].length, h = ic.p.length, r = '';
+    ic.p.forEach(function (line, y) {
+      for (var x = 0; x < w; x++) { if (line[x] === '#') { r += '<rect x="' + x + '" y="' + y + '" width="1" height="1"/>'; } }
+    });
+    // Drawn at 1 px per pixel, like the sprites, with a dark outline so it reads on any ground.
+    iconSvg[kind] = '<svg width="' + (w + 2) + '" height="' + (h + 2) + '" viewBox="-1 -1 ' + (w + 2) + ' ' + (h + 2) +
+      '" shape-rendering="crispEdges" aria-hidden="true"><g fill="#0B0F14" transform="translate(-1 0)">' + r +
+      '</g><g fill="#0B0F14" transform="translate(1 0)">' + r + '</g><g fill="#0B0F14" transform="translate(0 -1)">' + r +
+      '</g><g fill="#0B0F14" transform="translate(0 1)">' + r + '</g><g fill="' + ic.c + '">' + r + '</g></svg>';
+    return iconSvg[kind];
+  }
+  function emoteAt(cx, bottom, kind) {
+    var ic = ICONS[kind], w = ic.p[0].length + 2, h = ic.p.length + 2;
+    var e = document.createElement('span');
+    e.className = 'emote';
+    e.innerHTML = icon(kind);
+    e.style.left = Math.round(clamp(cx - w / 2, 1, G.w - w - 1)) + 'px';
+    e.style.bottom = Math.round(clamp(bottom, 0, G.h - h - 1)) + 'px';
+    $('route').appendChild(e);
+    setTimeout(function () { e.remove(); }, 1500);
+  }
+  Walker.prototype.headY = function () { return G.ground + this.y + this.m.h + 2; };
+  Walker.prototype.emote = function (kind, dx) { emoteAt(this.center() + (dx || 0), this.headY(), kind); };
+  function emoteBetween(a, b, kind) { emoteAt((a.center() + b.center()) / 2, Math.max(a.headY(), b.headY()) + 2, kind); }
+  Walker.prototype.dust = function () {
+    var cx = this.center(), route = $('route');
+    for (var i = 0; i < 4; i++) {
+      var d = document.createElement('span'), side = i < 2 ? -1 : 1;
+      d.className = 'dust';
+      d.style.left = Math.round(cx + side * rand(2, 6)) + 'px';
+      d.style.bottom = (G.ground + 1) + 'px';
+      route.appendChild(d);
+      (function (d, dx, dy) {
+        requestAnimationFrame(function () { requestAnimationFrame(function () {
+          d.style.transform = 'translate(' + dx + 'px,' + (-dy) + 'px)'; d.style.opacity = '0';
+        }); });
+        setTimeout(function () { d.remove(); }, 500);
+      })(d, side * rand(4, 9), rand(1, 4));
+    }
+  };
+
+  // ---- Hover: stop, look at you, show the name.
+  Walker.prototype.showTag = function () {
+    if (!this.tag) {
+      var t = document.createElement('span');
+      t.className = 'nameTag';
+      t.textContent = (names[this.dex] || ('#' + this.dex)) + (this.shiny ? ' ★' : '');
+      if (this.shiny) { t.style.color = state.accent; }
+      $('route').appendChild(t);
+      this.tag = t;
+    }
+    this.placeTag();
+  };
+  Walker.prototype.placeTag = function () {
+    var w = this.tag.offsetWidth, h = this.tag.offsetHeight;
+    this.tag.style.left = Math.round(clamp(this.center() - w / 2, 2, G.w - w - 2)) + 'px';
+    this.tag.style.bottom = Math.round(clamp(this.headY() + 1, 0, G.h - h - 2)) + 'px';
+  };
+  Walker.prototype.hideTag = function () { if (this.tag) { this.tag.remove(); this.tag = null; } };
+  Walker.prototype.look = function () {
+    this.seq++;
+    this.mode = 'look'; this.face = ROW_DOWN; this.y = 0;
+    this.hold();
+  };
+  Walker.prototype.hoverIn = function () {
+    this.hover = true;
+    if (press && press.held) { return; }
+    this.showTag();
+    if (this.mode === 'idle' || this.mode === 'walk') { this.look(); }
+  };
+  Walker.prototype.hoverOut = function () {
+    this.hover = false;
+    this.hideTag();
+    var self = this;
+    if (this.mode === 'look') { this.later(0.5, function () { if (!self.hover && self.mode === 'look') { self.resume(rand(0.2, 0.8)); } }); }
+  };
+  // After a scripted moment: keep looking at you if you're still pointing at it, else wander off.
+  Walker.prototype.settle = function () { if (this.hover) { this.look(); this.showTag(); } else { this.resume(); } };
+
+  // ---- Click: petting. A few pets make it happy; too many make it cross.
+  Walker.prototype.pet = function () {
+    if (this.mode === 'held' || this.mode === 'fall') { return; }
+    this.breakUp();
+    var now = Date.now(), self = this;
+    this.pets = this.pets.filter(function (t) { return now - t < 3000; });
+    this.pets.push(now);
+    var n = this.pets.length;
+    this.hideTag();   // the reaction icons go where the name tag sits; settle() brings it back
+    this.seq++; this.mode = 'act'; this.face = ROW_DOWN; this.y = 0;
+    if (n >= 7) {
+      this.pets = [];
+      this.emote('anger');
+      this.play('Charge', ROW_DOWN, { loops: 3, done: function () { self.emote('anger', 3); self.huff(); } });
+      return;
+    }
+    this.emote('heart');
+    if (n >= 4) {
+      this.emote('note', 7);
+      this.later(0.35, function () { self.emote('heart', -6); });
+      this.play('Hop', ROW_DOWN, { loops: 3, done: function () { self.settle(); } });
+    } else {
+      this.play('Hop', ROW_DOWN, { loops: 2, done: function () { self.settle(); } });
+    }
+  };
+  // Stomp off to the far side of the route, quickly.
+  Walker.prototype.huff = function () {
+    var far = this.center() < G.w / 2 ? maxXFor(this.m.fw) : G.minX;
+    this.resume();
+    this.walkTo(far, this.speed * 2.2);
+    this.cool = rand(10, 16);
+  };
+  Walker.prototype.startle = function () {
+    if (this.busy()) { return; }
+    var self = this;
+    this.seq++; this.mode = 'act'; this.face = ROW_DOWN; this.y = 0;
+    this.emote('bang');
+    this.play('Hop', ROW_DOWN, { done: function () { self.settle(); } });
+  };
+
+  // ---- Drag: pick it up, carry it along the route, drop it.
+  var press = null;
+  function routePoint(e) {
+    var r = $('route').getBoundingClientRect();
+    return { x: e.clientX - r.left, y: r.bottom - e.clientY };
+  }
+  function startPress(w, e) {
+    press = { w: w, x0: e.clientX, y0: e.clientY, lastX: e.clientX, held: false };
+  }
+  function endPress() {
+    press = null;
+    document.body.classList.remove('grabbing');
+  }
+  Walker.prototype.pickUp = function () {
+    this.breakUp();
+    this.seq++;
+    this.mode = 'held'; this.face = ROW_DOWN; this.tilt = 0;
+    this.hideTag();
+    this.el.style.zIndex = '6';
+    this.play('Hurt', ROW_DOWN, { loops: Infinity });
+    this.emote('bang');
+    document.body.classList.add('grabbing');
+  };
+  Walker.prototype.carry = function (e) {
+    var p = routePoint(e), m = this.m;
+    this.x = clamp(p.x - m.fw / 2, 0, G.w - m.fw);
+    // Held by the scruff: the cursor sits near the top of its head.
+    this.y = clamp(p.y - G.ground - m.h + 3, 2, Math.max(2, G.h - G.ground - 6));
+    this.tilt = clamp(this.tilt + (e.clientX - press.lastX) * 2, -35, 35);
+    press.lastX = e.clientX;
+  };
+  Walker.prototype.drop = function () {
+    this.mode = 'fall'; this.vy = 0; this.dropFrom = this.y; this.anim = null;
+    this.x = place(this.m, this.x);
+  };
+  Walker.prototype.fall = function (dt) {
+    this.vy -= 900 * dt;
+    this.y += this.vy * dt;
+    this.tilt *= Math.pow(0.001, dt);
+    if (this.y > 0) { return; }
+    this.y = 0;
+    if (this.vy < -150) { this.vy = -this.vy * 0.3; this.dust(); return; }   // one small bounce
+    this.vy = 0; this.tilt = 0;
+    this.dust();
+    var self = this;
+    this.mode = 'act'; this.face = ROW_DOWN;
+    this.el.style.zIndex = '';
+    if (this.dropFrom > 12) {
+      this.emote('swirl');
+      this.play('Hurt', ROW_DOWN, { loops: 2, done: function () { self.settle(); } });
+    } else {
+      this.play('Idle', ROW_DOWN, { done: function () { self.settle(); } });
+    }
+  };
+
+  // ---- Meetings: when two walkers cross paths they sometimes stop and have a moment.
+  var MOODS = ['love', 'friends', 'fun', 'angry', 'fight'];
+  var meetCool = rand(4, 8);
+  function checkMeetings(dt) {
+    meetCool -= dt;
+    if (meetCool > 0) { return; }
+    for (var i = 0; i < walkers.length; i++) {
+      for (var j = i + 1; j < walkers.length; j++) {
+        var a = walkers[i], b = walkers[j];
+        if (!free(a) || !free(b) || (a.mode !== 'walk' && b.mode !== 'walk')) { continue; }
+        if (Math.abs(a.center() - b.center()) > (a.m.fw + b.m.fw) * 0.3 + 6) { continue; }
+        if (Math.random() < 0.65) { meet(a, b); meetCool = rand(12, 25); return; }
+        a.cool = b.cool = rand(5, 9);   // passed each other by this time
+      }
+    }
+  }
+  function free(w) { return (w.mode === 'walk' || w.mode === 'idle') && w.cool <= 0 && !w.hover; }
+  function meet(a, b, mood) {
+    var L = a.center() <= b.center() ? a : b, R = L === a ? b : a;
+    var gap = (L.m.fw + R.m.fw) * 0.3 + 4, mid = (L.center() + R.center()) / 2;
+    [L, R].forEach(function (w) { w.seq++; w.mode = 'act'; w.anim = null; w.y = 0; w.cool = rand(20, 40); });
+    L.partner = R; R.partner = L;
+    L.face = ROW_RIGHT; R.face = ROW_LEFT;
+    L.x = place(L.m, mid - gap / 2 - L.m.fw / 2);
+    R.x = place(R.m, Math.max(mid + gap / 2, L.center() + gap) - R.m.fw / 2);
+    L.hold(); R.hold();
+    mood = mood || MOODS[Math.floor(Math.random() * MOODS.length)];
+    L.emote('bang');
+    L.later(0.6, function () { SCENES[mood](L, R); });
+  }
+  function part(L, R, how) {
+    L.partner = R.partner = null;
+    L.resume(); R.resume();
+    if (how === 'together') {
+      // Walk off side by side at the same pace.
+      var gap = R.x - L.x, sp = (L.speed + R.speed) / 2;
+      if (Math.random() < 0.5) { L.walkTo(G.minX, sp); R.walkTo(G.minX + gap, sp); }
+      else { R.walkTo(maxXFor(R.m.fw), sp); L.walkTo(maxXFor(R.m.fw) - gap, sp); }
+    } else {
+      var huff = how === 'huff';
+      L.walkTo(rand(G.minX, L.x - 10), huff ? L.speed * 2.2 : null);
+      R.walkTo(rand(R.x + 10, maxXFor(R.m.fw)), huff ? R.speed * 2.2 : null);
+    }
+  }
+  var SCENES = {
+    love: function (L, R) {
+      L.emote('heart');
+      L.later(0.5, function () { R.emote('heart'); });
+      L.later(1.0, function () { emoteBetween(L, R, 'heart'); L.play('Hop', ROW_RIGHT, { done: function () { L.hold(); } }); });
+      L.later(1.8, function () { emoteBetween(L, R, 'heart'); R.play('Hop', ROW_LEFT, { done: function () { R.hold(); } }); });
+      L.later(3.0, function () { emoteBetween(L, R, 'heart'); part(L, R, 'together'); });
+    },
+    friends: function (L, R) {
+      L.emote('note'); R.emote('note');
+      L.play('Hop', ROW_RIGHT, { loops: 2, done: function () { L.hold(); } });
+      R.play('Hop', ROW_LEFT, { loops: 2, done: function () { R.hold(); } });
+      L.later(0.9, function () { emoteBetween(L, R, 'note'); });
+      L.later(2.0, function () { part(L, R, 'together'); });
+    },
+    fun: function (L, R) {
+      L.emote('star'); R.emote('star');
+      L.play('Rotate', ROW_RIGHT, { loops: 2, done: function () {
+        emoteBetween(L, R, 'note');
+        L.play('Hop', ROW_RIGHT, { done: function () { L.hold(); } });
+        R.play('Hop', ROW_LEFT, { done: function () { R.hold(); } });
+        L.later(1.2, function () { part(L, R, 'apart'); });
+      } });
+      R.play('Rotate', ROW_LEFT, { loops: 2, done: function () { R.hold(); } });
+    },
+    angry: function (L, R) {
+      L.emote('anger');
+      L.play('Charge', ROW_RIGHT, { loops: 3, done: function () { L.hold(); } });
+      L.later(0.5, function () { R.emote('anger'); R.play('Charge', ROW_LEFT, { loops: 3, done: function () { R.hold(); } }); });
+      L.later(1.9, function () { L.emote('anger', -4); R.emote('anger', 4); });
+      L.later(2.6, function () { part(L, R, 'huff'); });
+    },
+    fight: function (L, R) {
+      var rounds = 2 + Math.floor(Math.random() * 2), atk = Math.random() < 0.5 ? L : R;
+      function swing() {
+        var a = atk, d = a === L ? R : L;
+        a.el.style.zIndex = '3'; d.el.style.zIndex = '2';
+        a.play('Attack', a.face, {
+          hit: function () {
+            d.emote('pow');
+            d.play('Hurt', d.face, { loops: 2, done: function () { d.hold(); } });
+            d.x = place(d.m, d.x + (d === R ? 3 : -3));
+          },
+          done: function () {
+            a.hold();
+            if (--rounds > 0) { atk = d; L.later(0.3, swing); } else { L.later(0.5, finish); }
+          }
+        });
+      }
+      function finish() {
+        var loser = Math.random() < 0.5 ? L : R, winner = loser === L ? R : L;
+        loser.emote('swirl');
+        loser.play('Hurt', loser.face, { loops: 2, done: function () { loser.hold(); } });
+        winner.emote('star');
+        winner.play('Hop', winner.face, { loops: 2, done: function () { winner.hold(); } });
+        L.later(1.6, function () { part(L, R, 'apart'); });
+      }
+      L.emote('anger', -3); R.emote('anger', 3);
+      L.later(0.5, swing);
+    }
   };
 
   function fits(map, d) { return map[d] && map[d].h <= G.maxH && map[d].fw <= G.w - G.minX - G.right; }
@@ -610,6 +1039,28 @@
   }
   $('ball').addEventListener('click', shuffle);
 
+  // Poke the sleeping Snorlax: it stirs; poke it a lot and it grumbles loud enough to startle everyone.
+  var snorPokes = [], zzzTimer = 0;
+  $('snorlax').addEventListener('click', function () {
+    var now = Date.now(), s = $('snorlax');
+    snorPokes = snorPokes.filter(function (t) { return now - t < 4000; });
+    snorPokes.push(now);
+    s.classList.remove('stir'); void s.offsetWidth; s.classList.add('stir');
+    $('zzz').style.visibility = 'hidden';
+    clearTimeout(zzzTimer);
+    zzzTimer = setTimeout(function () { $('zzz').style.visibility = ''; }, 4000);
+    var r = $('route').getBoundingClientRect(), sr = s.getBoundingClientRect();
+    var cx = sr.left - r.left + sr.width / 2, top = r.bottom - sr.top - 6;
+    if (snorPokes.length >= 4) {
+      snorPokes = [];
+      emoteAt(cx, top, 'anger');
+      walkers.forEach(function (w, i) { setTimeout(function () { if (!w.gone) { w.startle(); } }, i * 120); });
+    } else {
+      emoteAt(cx, top, snorPokes.length === 1 ? 'sweat' : 'bang');
+    }
+  });
+  $('snorlax').addEventListener('animationend', function (e) { if (e.animationName === 'stir') { this.classList.remove('stir'); } });
+
   // Swap one visitor for a new one (a fresh chance at a shiny).
   function rotate(forceShiny) {
     if (!walkers.length) { return; }
@@ -619,6 +1070,7 @@
       if (plain.length) { i = plain[Math.floor(Math.random() * plain.length)]; }
     }
     var old = walkers[i];
+    if (old.busy() || old.hover) { return; }
     var dex = randomDex(walkers.map(function (w) { return w.dex; }), forceShiny);
     if (dex == null) { return; }
     old.remove();
@@ -667,7 +1119,8 @@
     var keep = walkers.filter(function (w) { return fits(w.shiny ? walkShiny : walk, w.dex); }).slice(0, G.count);
     walkers.forEach(function (w) { if (keep.indexOf(w) < 0) { w.el.remove(); } });
     walkers = keep;
-    walkers.forEach(function (w, i) { w.x = place(w.m, Math.min(w.x, slotX(i, G.count))); w.mode = 'idle'; w.timer = rand(0.3, 1.5); w.draw(); });
+    if (press) { endPress(); }
+    walkers.forEach(function (w, i) { w.x = place(w.m, Math.min(w.x, slotX(i, G.count))); w.resume(rand(0.3, 1.5)); w.hideTag(); w.draw(); });
     while (walkers.length < G.count) {
       var d = randomDex(walkers.map(function (w) { return w.dex; }), false);
       if (d == null) { break; }
@@ -688,6 +1141,7 @@
     var dt = last ? Math.min(0.1, (t - last) / 1000) : 0;
     last = t;
     for (var i = 0; i < walkers.length; i++) { walkers[i].step(dt); }
+    if (walkers.length > 1) { checkMeetings(dt); }
     requestAnimationFrame(tick);
   }
   requestAnimationFrame(tick);
@@ -700,6 +1154,7 @@
     setWalk: function (w) {
       walk = w.normal || {};
       walkShiny = w.shiny || {};
+      names = w.names || {};
       setRoster([133, 54, 1]);   // the design's opening roster: Eevee, Psyduck, Bulbasaur
     },
     setSize: setSize,

@@ -27,6 +27,7 @@ Switch between four sizes from the menu bar icon (**◎ → Size**).
 - **Commit streak that evolves.** Reads your GitHub contribution calendar through the GitHub CLI. Your streak evolves Charmander → Charmeleon (7 days) → Charizard (30 days). The green bar under each day is that day's contributions.
 - **System HP.** Free memory as an HP bar (Jigglypuff, Psyduck or Gastly depending on how it's doing), plus CPU, disk and battery.
 - **Walking Pokémon.** Real 8-direction walk cycles: they wander, turn around and pause. Click the Poké Ball to shuffle in new ones from all 386 Gen 1–3 Pokémon. Snorlax naps on the right.
+- **Play with them.** Hover over a Pokémon to see its name and it stops to look at you. Click to pet it: it hops and shows a heart (pet it too much and it gets cross and stomps off). Drag it to pick it up and drop it somewhere else along the route. When two of them cross paths they sometimes stop for a moment: falling in love, hopping together as friends, spinning around for fun, glaring at each other, or having a quick fight. Poke Snorlax and it stirs; poke it a lot and it startles everyone.
 - **Shinies.** Every Pokémon that arrives has a 1-in-64 chance of being shiny (configurable). Visitors rotate every few minutes, shinies arrive with sparkles, and the menu keeps a log of every shiny you've spotted.
 
 ## Requirements
@@ -46,13 +47,13 @@ cd pokemon-desktop-widget
 
 ### 2. Download the sprites
 
-Sprites aren't included in this repo (they're Nintendo's artwork). This script downloads them for Gen 1–3 (#1–386) into `~/Documents/Pokemon Widget/sprites` (about 45 MB):
+Sprites aren't included in this repo (they're Nintendo's artwork). This script downloads them for Gen 1–3 (#1–386) into `~/Documents/Pokemon Widget/sprites` (about 125 MB, including the extra animations the Pokémon use when you play with them):
 
 ```bash
 ./fetch_sprites.sh
 ```
 
-It's safe to run again: it skips files you already have.
+It's safe to run again: it skips files you already have. If you set the widget up before the interactions existed, run it once more to download the new animations; without them the Pokémon still react, using their walk sprites.
 
 ### 3. Build and install
 
@@ -88,7 +89,7 @@ Then choose **◎ → Refresh**.
 
 ## Using it
 
-- **Move it:** drag from anywhere except the buttons. It remembers its position.
+- **Move it:** drag from anywhere except the buttons, the Pokémon and Snorlax. It remembers its position.
 - **Menu bar (◎):** Shuffle Pokémon, Summon a shiny, Refresh, Shinies spotted, Size, Keep on desktop (turn off to float above windows), Open at login, Reset position, Edit settings, Open sprites folder, Quit.
 
 ## Settings
