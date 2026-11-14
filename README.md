@@ -43,6 +43,27 @@ A Pokémon that finds a snack may also carry it over to a friend and share it.
 - **Shinies.** Every Pokémon that arrives has a 1-in-64 chance of being shiny (configurable). Visitors rotate every few minutes, shinies arrive with sparkles, and the menu keeps a log of every shiny you've spotted.
 - **New faces.** Click the Poké Ball to shuffle in a new group.
 
+## Pokémon Roam: let them loose on your whole screen
+
+A second, separate app in this repo, `roam/`. It fills your screen with 10–20 Pokémon (you choose how many):
+
+- **Walkers** stroll along the bottom of the screen, just above the Dock. They hop, take running leaps, curl up for naps (more at night), spin, sit and look around, and stop for a happy moment when they bump into each other.
+- **Flyers** (Pidgey, Zubat, Butterfree, Gastly, Swablu, Beautifly and friends) glide across the whole screen at different heights. Now and then they swoop down to land, wander about, and take off again.
+- **Your cursor.** The Pokémon never get in the way of your clicks, so they react to your cursor instead: walkers notice it, hop and tell you their name; flyers veer away.
+- **Comings and goings.** Pokémon wander in from the screen edges, leave now and then, and new ones arrive. Shinies sparkle.
+
+Every display gets its own share. Control it from the **paw print** in the menu bar: New faces, Pause, How many (5–30), Size, Above windows (turn off to keep them on the desktop, behind your windows), Open at login.
+
+It uses the same sprites as the widget, so run `./fetch_sprites.sh` first, then:
+
+```bash
+./roam/build.sh
+```
+
+```bash
+open /Applications/"Pokemon Roam.app"
+```
+
 ## Also on the widget
 
 - **Weather as Pokémon.** Live weather from [Open-Meteo](https://open-meteo.com) (free, no API key). Each condition has its own Pokémon: Sunflora for sunny, Swablu for part cloud, Castform for overcast, Gastly for haze, Squirtle for rain, Pikachu for storms, Snorunt for snow, Pidgey for wind.
@@ -158,17 +179,19 @@ Your shiny log is saved to `~/Documents/Pokemon Widget/shinies.json`.
 
 | File | What it is |
 |---|---|
-| `main.swift` | The app: desktop-level window, menu bar, weather, GitHub contributions, system vitals, sprite-sheet and evolution data |
+| `main.swift` | The widget app: desktop-level window, menu bar, weather, GitHub contributions, system vitals, sprite-sheet and evolution data |
 | `widget.html` | The widget UI (all four sizes) and the Pokémon: their animations, behaviour and everything you can do with them |
 | `build.sh` | Compiles, signs and installs the app |
 | `fetch_sprites.sh` | Downloads the sprites |
+| `sprites.swift` | Shared by both apps: sprite folder, sprite-sheet and evolution data, the `pw://` scheme |
+| `roam/` | Pokémon Roam: `main.swift` (a click-through window per display, menu bar), `roam.html` (the Pokémon), `build.sh` |
 
 ## Uninstall
 
 Quit from **◎ → Quit**, then:
 
 ```bash
-rm -rf /Applications/"Pokemon Widget.app" ~/Documents/"Pokemon Widget"
+rm -rf /Applications/"Pokemon Widget.app" /Applications/"Pokemon Roam.app" ~/Documents/"Pokemon Widget"
 ```
 
 ## Troubleshooting

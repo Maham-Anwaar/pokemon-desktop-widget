@@ -10,7 +10,7 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
 xcrun swiftc -O -sdk "$(xcrun --show-sdk-path --sdk macosx)" -target "$(uname -m)-apple-macos14.0" \
   -framework WebKit -framework IOKit -framework ServiceManagement \
-  main.swift -o "$APP/Contents/MacOS/PokemonWidget"
+  main.swift sprites.swift -o "$APP/Contents/MacOS/PokemonWidget"
 
 cp widget.html AppIcon.icns "$APP/Contents/Resources/"
 

@@ -1,0 +1,506 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pokémon Roam</title>
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; width: 100%; height: 100%; background: transparent; overflow: hidden; -webkit-user-select: none; user-select: none; }
+  .mon { position: absolute; left: 0; bottom: 0; image-rendering: pixelated; background-repeat: no-repeat; will-change: transform; transform-origin: 50% 100%; }
+  .mon.flyer { z-index: 2; }
+  .fx { position: absolute; left: 0; bottom: 0; pointer-events: none; z-index: 5; }
+  .fx svg { display: block; }
+  .emote { animation: emote 1.6s ease-out forwards; }
+  @keyframes emote { 0% { transform: translateY(6px) scale(.3); opacity: 0; } 14% { transform: translateY(0) scale(1.2); opacity: 1; } 24% { transform: scale(1); } 75% { opacity: 1; } 100% { transform: translateY(-18px); opacity: 0; } }
+  .sparkle { width: 7px; height: 7px; animation: twinkle .9s ease-out forwards; }
+  .sparkle::before, .sparkle::after { content: ''; position: absolute; left: 3px; top: 0; width: 1px; height: 7px; background: currentColor; border-radius: 1px; }
+  .sparkle::after { transform: rotate(90deg); }
+  @keyframes twinkle { 0% { transform: scale(0) rotate(0); opacity: 1; } 55% { transform: scale(1.6) rotate(45deg); opacity: 1; } 100% { transform: scale(.4) rotate(90deg); opacity: 0; } }
+  .tag { font-family: Silkscreen, ui-monospace, monospace; font-size: 10px; letter-spacing: .5px; line-height: 12px; padding: 2px 6px; border-radius: 5px; background: rgba(10,14,19,.86); color: #E6ECF4; white-space: nowrap; box-shadow: 0 0 0 1px rgba(255,255,255,.1); transition: opacity .5s ease; }
+</style>
+</head>
+<body>
+<script>
+(function () {
+  'use strict';
+  var SPR = 'pw://sprites/';
+  var ROW_DOWN = 0, ROW_RIGHT = 2, ROW_LEFT = 6;
+
+  // Gen 1-3 Pokémon that fly or float; everyone else walks along the bottom of the screen.
+  var FLYERS = [6, 12, 15, 16, 17, 18, 21, 22, 41, 42, 49, 81, 82, 92, 93, 109, 110, 142, 144, 145, 146, 149, 151,
+    163, 164, 165, 166, 169, 176, 177, 178, 187, 188, 189, 193, 198, 200, 201, 207, 225, 227, 249, 250, 251, 267, 269,
+    276, 277, 278, 279, 284, 291, 292, 329, 330, 333, 334, 337, 338, 343, 344, 353, 354, 355, 358, 380, 381, 384, 385];
+  var isFlyer = {};
+  FLYERS.forEach(function (d) { isFlyer[d] = true; });
+
+  var walk = {}, walkShiny = {}, names = {};
+  var mons = [], target = 0, S = 2, paused = false, shinyOdds = 64;
+  var W = innerWidth, H = innerHeight;
+  var mouse = null;
+
+  function rand(a, b) { return a + Math.random() * (b - a); }
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+  function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
+  function post(msg) { try { window.webkit.messageHandlers.native.postMessage(msg); } catch (e) {} }
+
+  // ---------- pixel icons ----------
+  var ICONS = {
+    heart: { c: '#FF5C7C', p: ['.##.##.', '#######', '#######', '.#####.', '..###..', '...#...'] },
+    note:  { c: '#8FD3FF', p: ['..###', '..#.#', '..#..', '..#..', '###..', '###..'] },
+    bang:  { c: '#FFE15A', p: ['##', '##', '##', '..', '##'] },
+    star:  { c: '#FFE15A', p: ['..#..', '.###.', '#####', '.###.', '.#.#.'] },
+    zzz:   { c: '#C9D6FF', p: ['####', '..#.', '.#..', '####'] },
+    sweat: { c: '#7FC8FF', p: ['.#.', '##.', '###', '###', '.#.'] }
+  };
+  var iconCache = {};
+  function icon(kind) {
+    var key = kind + S;
+    if (iconCache[key]) { return iconCache[key]; }
+    var ic = ICONS[kind], w = ic.p[0].length, h = ic.p.length, r = '';
+    ic.p.forEach(function (line, y) {
+      for (var x = 0; x < w; x++) { if (line[x] === '#') { r += '<rect x="' + x + '" y="' + y + '" width="1" height="1"/>'; } }
+    });
+    var o = '';
+    [[-1, 0], [1, 0], [0, -1], [0, 1]].forEach(function (d) { o += '<g transform="translate(' + d[0] + ' ' + d[1] + ')">' + r + '</g>'; });
+    iconCache[key] = { w: (w + 2) * S, h: (h + 2) * S, svg: '<svg width="' + (w + 2) * S + '" height="' + (h + 2) * S + '" viewBox="-1 -1 ' + (w + 2) + ' ' + (h + 2) +
+      '" shape-rendering="crispEdges" aria-hidden="true"><g fill="#0B0F14">' + o + '</g><g fill="' + ic.c + '">' + r + '</g></svg>' };
+    return iconCache[key];
+  }
+  function fx(el, x, y, life) {
+    el.style.transform = 'translate(' + Math.round(x) + 'px,' + Math.round(-y) + 'px)';
+    document.body.appendChild(el);
+    setTimeout(function () { el.remove(); }, life);
+  }
+  function emoteAt(cx, y, kind) {
+    var ic = icon(kind), wrap = document.createElement('div'), e = document.createElement('div');
+    wrap.className = 'fx';
+    e.className = 'emote';
+    e.innerHTML = ic.svg;
+    wrap.appendChild(e);
+    fx(wrap, cx - ic.w / 2, Math.min(y, H - ic.h - 2), 1700);
+  }
+
+  // ---------- a Pokémon ----------
+  function Mon(dex, shiny) {
+    this.dex = dex; this.shiny = shiny;
+    this.m = shiny ? walkShiny[dex] : walk[dex];
+    this.base = SPR + (shiny ? 'shiny/' : '');
+    this.flyer = !!isFlyer[dex];
+    this.x = 0; this.y = 0; this.dir = 1;
+    this.mode = 'idle'; this.timer = 0;
+    this.frame = 0; this.ft = 0;
+    this.anim = null; this.face = null; this.seq = 0;
+    this.speed = rand(14, 24); this.walkSpeed = this.speed;
+    this.cool = rand(3, 8); this.sparkleIn = rand(0.5, 2);
+    this.bob = rand(0, 6.28);
+    var el = document.createElement('div');
+    el.className = 'mon' + (this.flyer ? ' flyer' : '');
+    this.el = el; this.sheetKey = '';
+    document.body.appendChild(el);
+    var a = this.m.anims || {}, self = this;
+    this.imgs = Object.keys(a).map(function (k) { var i = new Image(); i.src = self.base + 'anim/' + a[k].src + '/' + dex + '.png'; return i; });
+  }
+  Mon.prototype.wpx = function () { return this.m.fw * S; };
+  Mon.prototype.center = function () { return this.x + this.wpx() / 2; };
+  Mon.prototype.headY = function () { return this.y + this.m.h * S + 4; };
+  Mon.prototype.emote = function (kind, dx) { emoteAt(this.center() + (dx || 0) * S, this.headY(), kind); };
+  Mon.prototype.later = function (sec, fn) {
+    var self = this, seq = this.seq;
+    setTimeout(function () { if (self.seq === seq && !self.gone) { fn(); } }, sec * 1000);
+  };
+  Mon.prototype.sheetFor = function (name) {
+    var a = this.m.anims && this.m.anims[name];
+    if (a) {
+      return { url: this.base + 'anim/' + a.src + '/' + this.dex + '.png', fw: a.fw, fh: a.fh, durs: a.durs, rows: a.rows || 8 };
+    }
+    var durs = name === 'Idle' || name === 'Sleep' ? [40] : this.m.durs;
+    return { url: this.base + 'walk/' + this.dex + '.png', fw: this.m.fw, fh: this.m.fh, durs: durs, rows: 8, fake: name };
+  };
+  Mon.prototype.play = function (name, row, opts) {
+    opts = opts || {};
+    var s = this.sheetFor(name), total = 0;
+    s.durs.forEach(function (d) { total += d; });
+    this.anim = { s: s, row: row, frame: 0, ft: 0, t: 0, total: total, loops: opts.loops || 1, done: opts.done };
+  };
+  Mon.prototype.stepAnim = function (dt) {
+    var a = this.anim;
+    a.ft += dt * 60; a.t += dt * 60;
+    while (this.anim === a && a.ft >= a.s.durs[a.frame]) {
+      a.ft -= a.s.durs[a.frame];
+      a.frame++;
+      if (a.frame >= a.s.durs.length) {
+        if (--a.loops > 0) { a.frame = 0; a.t = 0; }
+        else { a.frame = a.s.durs.length - 1; this.anim = null; if (a.done) { a.done(); } break; }
+      }
+    }
+  };
+  Mon.prototype.cycle = function (dt, mult) {
+    this.ft += dt * 60 * (mult || 1);
+    while (this.ft >= this.m.durs[this.frame]) {
+      this.ft -= this.m.durs[this.frame];
+      this.frame = (this.frame + 1) % this.m.durs.length;
+    }
+  };
+  Mon.prototype.draw = function () {
+    var m = this.m, a = this.anim, s = a ? a.s : m, row, frame, oy = 0;
+    if (a) { row = a.row; frame = a.frame; }
+    else if (this.mode === 'walk' || this.mode === 'fly' || this.mode === 'leap' || this.mode === 'leave' || this.mode === 'enter' ||
+             this.mode === 'land' || this.mode === 'takeoff') { row = this.dir > 0 ? ROW_RIGHT : ROW_LEFT; frame = this.frame; }
+    else { row = this.face != null ? this.face : ROW_DOWN; frame = 0; }
+    if (a && s.fake) {
+      var p = Math.min(1, a.t / a.total);
+      if (s.fake === 'Hop') { oy = Math.sin(p * Math.PI) * 9; }
+      else if (s.fake === 'Rotate') { row = [0, 2, 4, 6][Math.floor(p * 8) % 4]; }
+      if (s.fake === 'Idle' || s.fake === 'Sleep') { frame = 0; }
+    }
+    var url = a ? s.url : this.base + 'walk/' + this.dex + '.png';
+    var key = url + '|' + s.fw + '|' + s.fh + '|' + S;
+    if (this.sheetKey !== key) {
+      this.sheetKey = key;
+      this.el.style.width = s.fw * S + 'px';
+      this.el.style.height = s.fh * S + 'px';
+      this.el.style.backgroundImage = 'url(' + url + ')';
+      this.el.style.backgroundSize = (s.fw * s.durs.length * S) + 'px ' + (s.fh * (s.rows === 1 ? 1 : 8) * S) + 'px';
+    }
+    // Every sheet shares the walk sheet's anchor (the frame centre): bigger frames shift by half the difference.
+    var pad = (s.rows !== 1 && (row === ROW_RIGHT || row === ROW_LEFT) ? m.padSide : m.padDown) + (s.fh - m.fh) / 2;
+    var bx = this.x - (s.fw - m.fw) / 2 * S, by = this.y + (oy - pad) * S;
+    this.el.style.backgroundPosition = (-frame * s.fw * S) + 'px ' + (-(s.rows === 1 ? 0 : row) * s.fh * S) + 'px';
+    this.el.style.transform = 'translate(' + Math.round(bx) + 'px,' + Math.round(-by) + 'px)';
+    if (this.tag) { this.placeTag(); }
+  };
+  Mon.prototype.sparkle = function () {
+    var wrap = document.createElement('div'), s = document.createElement('div');
+    wrap.className = 'fx';
+    s.className = 'sparkle';
+    s.style.position = 'relative';
+    s.style.color = Math.random() < 0.5 ? '#FFF6C2' : '#FFCB05';
+    wrap.appendChild(s);
+    fx(wrap, this.x + rand(0, this.wpx()), this.y + rand(0, this.m.h * S), 950);
+  };
+  Mon.prototype.showTag = function (sec) {
+    if (!this.tag) {
+      var t = document.createElement('div');
+      t.className = 'fx tag';
+      t.textContent = (names[this.dex] || '#' + this.dex) + (this.shiny ? ' ★' : '');
+      if (this.shiny) { t.style.color = '#FFCB05'; }
+      document.body.appendChild(t);
+      this.tag = t;
+    }
+    this.placeTag();
+    clearTimeout(this.tagTimer);
+    var self = this;
+    this.tagTimer = setTimeout(function () { self.hideTag(); }, (sec || 2.5) * 1000);
+  };
+  Mon.prototype.placeTag = function () {
+    var w = this.tag.offsetWidth;
+    this.tag.style.transform = 'translate(' + Math.round(clamp(this.center() - w / 2, 2, W - w - 2)) + 'px,' + Math.round(-Math.min(this.headY() + 6, H - 20)) + 'px)';
+  };
+  Mon.prototype.hideTag = function () { if (this.tag) { this.tag.remove(); this.tag = null; } };
+  Mon.prototype.remove = function () {
+    this.gone = true;
+    this.hideTag();
+    this.el.remove();
+    mons = mons.filter(function (x) { return x !== this; }, this);
+  };
+
+  // ---------- behaviour ----------
+  Mon.prototype.resume = function (pause) {
+    this.seq++;
+    this.anim = null; this.face = null; this.partner = null;
+    this.mode = this.flyer && !this.grounded ? 'fly' : 'idle';
+    this.timer = pause != null ? pause : rand(0.5, 2);
+    this.walkSpeed = this.speed;
+    if (this.mode === 'fly') { this.newCourse(); }
+  };
+  Mon.prototype.minX = function () { return 4; };
+  Mon.prototype.maxX = function () { return W - this.wpx() - 4; };
+  Mon.prototype.walkTo = function (x, speed) {
+    this.target = clamp(x, this.minX(), this.maxX());
+    if (Math.abs(this.target - this.x) < 6) { this.mode = 'idle'; this.timer = rand(0.5, 2); return; }
+    this.dir = this.target > this.x ? 1 : -1;
+    this.mode = 'walk'; this.anim = null; this.face = null;
+    this.walkSpeed = (speed || this.speed) * S;
+  };
+  // On the ground with nothing to do: pick the next thing.
+  Mon.prototype.whim = function () {
+    var self = this, r = Math.random();
+    if (this.flyer && this.grounded && this.groundFor <= 0) { this.takeOff(); return; }
+    var h = new Date().getHours(), sleepy = h >= 22 || h < 6 ? 0.16 : 0.06;
+    if (r < 0.5) { this.walkTo(this.x + rand(-1, 1) * rand(80, 420) * S / 2); return; }
+    r -= 0.5;
+    if (r < 0.12) {
+      this.seq++; this.mode = 'act';
+      if (Math.random() < 0.4) { this.emote('note'); }
+      this.play('Hop', ROW_DOWN, { loops: Math.random() < 0.5 ? 1 : 2, done: function () { self.resume(); } });
+      return;
+    }
+    r -= 0.12;
+    if (r < 0.1) { this.leap(); return; }
+    r -= 0.1;
+    if (r < sleepy) { this.sleep(rand(10, 30)); return; }
+    r -= sleepy;
+    if (r < 0.06) {
+      this.seq++; this.mode = 'act';
+      this.emote('star');
+      this.play('Rotate', ROW_DOWN, { loops: 3, done: function () { self.resume(); } });
+      return;
+    }
+    // Sit a moment, looking around.
+    this.seq++; this.mode = 'act'; this.face = ROW_DOWN;
+    this.play('Idle', ROW_DOWN, { loops: Infinity });
+    this.later(rand(2, 5), function () { self.resume(); });
+  };
+  // A running jump across the ground.
+  Mon.prototype.leap = function () {
+    this.seq++;
+    this.dir = this.center() < W / 2 ? (Math.random() < 0.7 ? 1 : -1) : (Math.random() < 0.7 ? -1 : 1);
+    this.mode = 'leap'; this.anim = null;
+    this.vx = this.dir * rand(90, 150) * S / 2;
+    this.vy = rand(260, 380) * S / 2;
+    this.leaps = Math.random() < 0.4 ? 2 : 1;
+  };
+  Mon.prototype.sleep = function (sec) {
+    this.seq++;
+    this.mode = 'sleep'; this.face = ROW_DOWN;
+    this.timer = sec; this.zIn = rand(0.3, 1);
+    this.play('Sleep', ROW_DOWN, { loops: Infinity });
+  };
+  // Flyers: a new heading and cruising height.
+  Mon.prototype.newCourse = function () {
+    this.alt = rand(H * 0.25, H * 0.85);
+    this.walkSpeed = rand(40, 85) * S / 2;
+    this.timer = rand(6, 14);
+  };
+  Mon.prototype.land = function () {
+    this.seq++;
+    this.mode = 'land';
+    this.target = clamp(this.x + this.dir * rand(100, 300), this.minX(), this.maxX());
+  };
+  Mon.prototype.takeOff = function () {
+    this.seq++;
+    this.grounded = false;
+    this.mode = 'takeoff'; this.anim = null;
+    this.dir = Math.random() < 0.5 ? -1 : 1;
+    this.newCourse();
+  };
+  // Leave by the nearest edge, then make room for a newcomer.
+  Mon.prototype.leave = function () {
+    this.seq++;
+    this.hideTag();
+    this.mode = 'leave'; this.anim = null; this.face = null;
+    this.dir = this.center() < W / 2 ? -1 : 1;
+    this.walkSpeed = this.speed * S * 1.6;
+  };
+
+  Mon.prototype.step = function (dt) {
+    var self = this;
+    if (this.shiny) { this.sparkleIn -= dt; if (this.sparkleIn <= 0) { this.sparkle(); this.sparkleIn = rand(0.6, 2); } }
+    this.cool -= dt;
+    if (this.grounded) { this.groundFor -= dt; }
+    if (this.anim) { this.stepAnim(dt); }
+    switch (this.mode) {
+      case 'enter':
+      case 'leave': {
+        this.x += this.dir * this.walkSpeed * dt;
+        this.cycle(dt, 1.4);
+        if (this.flyer) { this.bob += dt * 3; this.y += (this.alt - this.y) * Math.min(1, dt * 0.8) + Math.sin(this.bob) * 0.6; }
+        if (this.mode === 'enter' && this.x > this.minX() + 20 && this.x < this.maxX() - 20) { this.resume(); }
+        if (this.mode === 'leave' && (this.x < -this.wpx() - 20 || this.x > W + 20)) { this.remove(); return; }
+        break;
+      }
+      case 'idle':
+        this.timer -= dt;
+        if (this.timer <= 0) { this.whim(); }
+        break;
+      case 'walk':
+        this.x += this.dir * this.walkSpeed * dt;
+        this.cycle(dt, Math.max(1, this.walkSpeed / (this.speed * S)));
+        if ((this.dir > 0 && this.x >= this.target) || (this.dir < 0 && this.x <= this.target)) {
+          this.x = this.target; this.mode = 'idle'; this.timer = rand(0.8, 3.5); this.frame = 0; this.walkSpeed = this.speed;
+        }
+        break;
+      case 'leap':
+        this.x += this.vx * dt;
+        this.vy -= 900 * S / 2 * dt;
+        this.y += this.vy * dt;
+        this.cycle(dt, 2);
+        if (this.x < this.minX() || this.x > this.maxX()) { this.x = clamp(this.x, this.minX(), this.maxX()); this.vx = -this.vx; this.dir = -this.dir; }
+        if (this.y <= 0) {
+          this.y = 0;
+          if (--this.leaps > 0) { this.vy = rand(200, 300) * S / 2; }
+          else { this.mode = 'idle'; this.timer = rand(0.5, 1.5); this.frame = 0; }
+        }
+        break;
+      case 'sleep':
+        this.timer -= dt; this.zIn -= dt;
+        if (this.zIn <= 0) { emoteAt(this.center() + 8 * S, this.y + this.m.h * S * 0.7, 'zzz'); this.zIn = rand(1.4, 2.4); }
+        if (this.timer <= 0) {
+          this.seq++; this.mode = 'act';
+          this.play('Hop', ROW_DOWN, { done: function () { self.resume(); } });
+        }
+        break;
+      case 'fly':
+        this.timer -= dt;
+        this.bob += dt * 2.6;
+        this.x += this.dir * this.walkSpeed * dt;
+        this.y += (this.alt - this.y) * Math.min(1, dt * 0.6) + Math.sin(this.bob) * 0.5 * S;
+        this.cycle(dt);
+        if (this.x < this.minX() && this.dir < 0 || this.x > this.maxX() && this.dir > 0) { this.dir = -this.dir; }
+        if (this.timer <= 0) {
+          if (Math.random() < 0.3) { this.land(); } else { this.newCourse(); if (Math.random() < 0.3) { this.dir = -this.dir; } }
+        }
+        break;
+      case 'land':
+        this.bob += dt * 2.6;
+        this.x += this.dir * this.walkSpeed * 0.6 * dt;
+        this.y = Math.max(0, this.y - Math.max(40 * S, this.y * 1.2) * dt);
+        this.cycle(dt);
+        if (this.x < this.minX() || this.x > this.maxX()) { this.dir = -this.dir; this.x = clamp(this.x, this.minX(), this.maxX()); }
+        if (this.y <= 0) {
+          this.y = 0; this.grounded = true; this.groundFor = rand(15, 40);
+          this.mode = 'idle'; this.timer = rand(0.5, 1.5); this.frame = 0;
+        }
+        break;
+      case 'takeoff':
+        this.bob += dt * 2.6;
+        this.x += this.dir * this.walkSpeed * 0.7 * dt;
+        this.y += Math.max(50 * S, (this.alt - this.y) * 1.2) * dt;
+        this.cycle(dt, 1.5);
+        if (this.x < this.minX() || this.x > this.maxX()) { this.dir = -this.dir; this.x = clamp(this.x, this.minX(), this.maxX()); }
+        if (this.y >= this.alt) { this.mode = 'fly'; }
+        break;
+    }
+    this.draw();
+  };
+
+  // The cursor: walkers nearby notice it (and say who they are); flyers veer away.
+  function reactToMouse() {
+    if (!mouse) { return; }
+    var mx = mouse.x, my = H - mouse.y;
+    mons.forEach(function (m) {
+      if (m.cool > 0) { return; }
+      var dx = mx - m.center(), dy = my - (m.y + m.m.h * S / 2);
+      var near = Math.abs(dx) < 70 * S / 2 + m.wpx() / 2 && Math.abs(dy) < 90 * S / 2 + m.m.h * S;
+      if (!near) { return; }
+      if (m.mode === 'fly') {
+        m.dir = dx > 0 ? -1 : 1;
+        m.alt = clamp(m.y + (dy > 0 ? -1 : 1) * rand(80, 160), H * 0.2, H * 0.9);
+        m.walkSpeed *= 1.3;
+        m.cool = 3;
+        if (Math.random() < 0.5) { m.emote('bang'); }
+      } else if (m.mode === 'idle' || m.mode === 'walk') {
+        m.cool = rand(6, 10);
+        m.seq++; m.mode = 'act'; m.face = ROW_DOWN;
+        m.emote(Math.random() < 0.5 ? 'bang' : 'heart');
+        m.showTag(2.5);
+        m.play('Hop', ROW_DOWN, { done: function () { m.play('Idle', ROW_DOWN, { loops: Infinity }); m.later(1.2, function () { m.resume(); }); } });
+      }
+    });
+  }
+
+  // Two walkers bumping into each other sometimes stop for a happy moment.
+  function meetings() {
+    var g = mons.filter(function (m) { return (m.mode === 'walk' || m.mode === 'idle') && m.cool <= 0 && !m.flyer; });
+    for (var i = 0; i < g.length; i++) {
+      for (var j = i + 1; j < g.length; j++) {
+        var a = g[i], b = g[j];
+        if (a.mode !== 'walk' && b.mode !== 'walk') { continue; }
+        if (Math.abs(a.center() - b.center()) > (a.wpx() + b.wpx()) * 0.3 + 4) { continue; }
+        a.cool = b.cool = rand(12, 25);
+        if (Math.random() > 0.35) { continue; }
+        var L = a.center() < b.center() ? a : b, R = L === a ? b : a, kind = pick(['heart', 'note', 'star']);
+        [L, R].forEach(function (m) { m.seq++; m.mode = 'act'; });
+        L.face = ROW_RIGHT; R.face = ROW_LEFT;
+        emoteAt((L.center() + R.center()) / 2, Math.max(L.headY(), R.headY()), kind);
+        L.play('Hop', ROW_RIGHT, { loops: 2, done: function () { L.play('Idle', ROW_RIGHT, { loops: Infinity }); } });
+        R.play('Hop', ROW_LEFT, { loops: 2, done: function () { R.play('Idle', ROW_LEFT, { loops: Infinity }); } });
+        L.later(1.6, function () { L.resume(); L.walkTo(L.x - rand(60, 200)); });
+        R.later(1.6, function () { R.resume(); R.walkTo(R.x + rand(60, 200)); });
+        return;
+      }
+    }
+  }
+
+  // ---------- the cast ----------
+  function randomDex() {
+    var have = {};
+    mons.forEach(function (m) { have[m.dex] = true; });
+    var flyers = FLYERS.filter(function (d) { return walk[d] && !have[d] && walk[d].h <= 56; });   // skip the giants (Rayquaza, Lugia...)
+    var walkers = Object.keys(walk).map(Number).filter(function (d) { return !isFlyer[d] && !have[d] && walk[d].h <= 60; });
+    var pool = Math.random() < 0.3 && flyers.length ? flyers : walkers;
+    return pool.length ? pick(pool) : null;
+  }
+  function arrive() {
+    var dex = randomDex();
+    if (dex == null) { return; }
+    var shiny = !!walkShiny[dex] && Math.random() < 1 / shinyOdds;
+    var m = new Mon(dex, shiny);
+    var fromLeft = Math.random() < 0.5;
+    m.dir = fromLeft ? 1 : -1;
+    m.x = fromLeft ? -m.wpx() - 10 : W + 10;
+    m.mode = 'enter';
+    m.walkSpeed = m.speed * S * 1.3;
+    if (m.flyer) { m.newCourse(); m.y = m.alt; m.walkSpeed = rand(50, 90) * S / 2; }
+    mons.push(m);
+    m.draw();
+  }
+  var arriveIn = 0, rotateIn = rand(50, 100);
+  function manageCast(dt) {
+    var staying = mons.filter(function (m) { return m.mode !== 'leave'; });
+    arriveIn -= dt;
+    if (staying.length < target && arriveIn <= 0) { arrive(); arriveIn = rand(0.4, 1.2); }
+    if (staying.length > target) {
+      var go = staying.filter(function (m) { return m.mode === 'idle' || m.mode === 'walk' || m.mode === 'fly'; });
+      if (go.length) { pick(go).leave(); }
+    }
+    rotateIn -= dt;
+    if (rotateIn <= 0) {
+      rotateIn = rand(50, 110);
+      var free = staying.filter(function (m) { return m.mode === 'idle' || m.mode === 'walk' || m.mode === 'fly'; });
+      if (free.length && staying.length >= target) { pick(free).leave(); }
+    }
+  }
+
+  var last = 0, meetIn = 0.5;
+  function tick(t) {
+    var dt = last ? Math.min(0.1, (t - last) / 1000) : 0;
+    last = t;
+    if (!paused && dt > 0) {
+      mons.slice().forEach(function (m) { m.step(dt); });
+      manageCast(dt);
+      meetIn -= dt;
+      if (meetIn <= 0) { meetIn = 0.25; meetings(); reactToMouse(); }
+    }
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+
+  addEventListener('resize', function () {
+    W = innerWidth; H = innerHeight;
+    mons.forEach(function (m) { m.x = clamp(m.x, -m.wpx(), W); if (m.flyer) { m.alt = clamp(m.alt, H * 0.2, H * 0.9); } });
+  });
+
+  window.roam = {
+    setup: function (d) {
+      walk = d.normal || {}; walkShiny = d.shiny || {}; names = d.names || {};
+      S = d.scale || 2; paused = !!d.paused;
+      target = d.count || 10;
+    },
+    setCount: function (n) { target = n; },
+    setScale: function (s) {
+      S = s; iconCache = {};
+      mons.forEach(function (m) { m.sheetKey = ''; m.x = clamp(m.x, m.minX(), m.maxX()); if (m.flyer && !m.grounded) { m.newCourse(); } });
+    },
+    pause: function (p) { paused = !!p; },
+    shuffle: function () {
+      mons.forEach(function (m) { if (m.mode !== 'leave') { m.leave(); } });
+      arriveIn = 1;
+    },
+    mouse: function (p) { mouse = p; }
+  };
+  post({ type: 'ready' });
+})();
+</script>
+</body>
+</html>
