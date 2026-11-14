@@ -1,3 +1,5 @@
+<img src="icon.svg" width="128" alt="Pokémon Widget app icon">
+
 # Pokémon Desktop Widget
 
 A little Pokémon-themed "trainer card" that lives on your Mac desktop. It shows the weather, a month calendar, your GitHub commit streak and your Mac's vitals, while pixel Pokémon wander along a grassy route at the bottom. Every now and then a **shiny** shows up. ✨

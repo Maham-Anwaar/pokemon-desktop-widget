@@ -12,7 +12,7 @@ xcrun swiftc -O -sdk "$(xcrun --show-sdk-path --sdk macosx)" -target "$(uname -m
   -framework WebKit -framework IOKit -framework ServiceManagement \
   main.swift -o "$APP/Contents/MacOS/PokemonWidget"
 
-cp widget.html "$APP/Contents/Resources/"
+cp widget.html AppIcon.icns "$APP/Contents/Resources/"
 
 cat > "$APP/Contents/Info.plist" <<'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -23,6 +23,7 @@ cat > "$APP/Contents/Info.plist" <<'EOF'
   <key>CFBundleName</key><string>Pokemon Widget</string>
   <key>CFBundleDisplayName</key><string>Pokémon Widget</string>
   <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundleShortVersionString</key><string>1.0</string>
   <key>CFBundleVersion</key><string>1</string>
   <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
