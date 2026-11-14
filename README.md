@@ -2,15 +2,57 @@
 
 # Pokémon Desktop Widget
 
-A little Pokémon-themed "trainer card" that lives on your Mac desktop. It shows the weather, a month calendar, your GitHub commit streak and your Mac's vitals, while pixel Pokémon wander along a grassy route at the bottom. Every now and then a **shiny** shows up. ✨
+A little route of pixel Pokémon that lives on your Mac desktop, and they're yours to play with. Pet them, pick them up, feed them berries, watch them make friends (or pick fights), nap, find snacks, bring you presents and, once in a while, evolve. Every now and then a **shiny** wanders in. ✨
+
+Around them sits a Pokémon-themed "trainer card" with the weather, a calendar, your GitHub commit streak and your Mac's vitals, as nice extras.
 
 A hobby project: a native macOS app (Swift + WebKit) that pins a transparent window to the desktop layer, behind your other windows, so it feels like a widget but can animate smoothly.
 
 ![Large widget](screenshots/large.png)
 
+## Play with your Pokémon
+
+Up to four Pokémon roam the route at a time, drawn from all 386 Gen 1–3 Pokémon, with real animations for walking, hopping, eating, sleeping, attacking and more.
+
+### You and them
+
+- **Say hi.** Hover over a Pokémon and it stops, turns to look at you and shows its name.
+- **Pet it.** Click it and it hops with a heart. Pet it a few times in a row and it gets really happy; pet it too much and it gets cross and stomps off.
+- **Pick it up.** Drag a Pokémon to carry it along the route. It dangles and swings as you move, and lands with a little bounce (dizzy if you drop it from high up).
+- **Feed it.** Click the berry badge by the Poké Ball to toss a berry or apple onto the route, or drag it to exactly where you want it. The nearest Pokémon trots over and eats it.
+- **Accept a gift.** Sometimes a Pokémon finds a berry and holds it up to you, hopping to get your attention. Click it to take the present. Ignore it and it'll eat it itself.
+- **Poke Snorlax.** It stirs in its sleep. Poke it a lot and it grumbles loud enough to startle everyone.
+
+### Them and each other
+
+When two Pokémon cross paths they sometimes stop, face each other and have a moment:
+
+- **Love:** hearts, then they walk off side by side.
+- **Friends:** they hop together to music, then leave together.
+- **Fun:** they spin around and hop.
+- **Angry:** they power up, glare, and stomp off in opposite directions.
+- **Fight:** a few rounds of attacks until one wins. Usually the loser just wobbles off, but sometimes it faints for good: a little ghost floats up, it fades away, and a new Pokémon wanders in.
+
+A Pokémon that finds a snack may also carry it over to a friend and share it.
+
+### A life of their own
+
+- **Naps.** Now and then a Pokémon curls up asleep (more often late at night). Click it to wake it.
+- **Spins.** Sometimes one spins around just for fun.
+- **Evolutions.** Rarely, a Pokémon that can evolve does, with the classic white flicker between forms. One you've petted, fed and taken gifts from is much likelier to evolve.
+- **Shinies.** Every Pokémon that arrives has a 1-in-64 chance of being shiny (configurable). Visitors rotate every few minutes, shinies arrive with sparkles, and the menu keeps a log of every shiny you've spotted.
+- **New faces.** Click the Poké Ball to shuffle in a new group.
+
+## Also on the widget
+
+- **Weather as Pokémon.** Live weather from [Open-Meteo](https://open-meteo.com) (free, no API key). Each condition has its own Pokémon: Sunflora for sunny, Swablu for part cloud, Castform for overcast, Gastly for haze, Squirtle for rain, Pikachu for storms, Snorunt for snow, Pidgey for wind.
+- **Month calendar.** Past days show the weather that actually happened, upcoming days show the forecast (up to 14 days ahead). Click a day for details.
+- **Commit streak that evolves.** Reads your GitHub contribution calendar through the GitHub CLI. Your streak evolves Charmander → Charmeleon (7 days) → Charizard (30 days). The green bar under each day is that day's contributions.
+- **System HP.** Free memory as an HP bar (Jigglypuff, Psyduck or Gastly depending on how it's doing), plus CPU, disk and battery.
+
 ## Sizes
 
-Switch between four sizes from the menu bar icon (**◎ → Size**).
+Switch between four sizes from the menu bar icon (**◎ → Size**). Every size has the route; **Mini route** is just the Pokémon.
 
 | Medium (748 × 190) |
 |---|
@@ -19,19 +61,6 @@ Switch between four sizes from the menu bar icon (**◎ → Size**).
 | Small (170 × 170) | Mini route (320 × 64) |
 |---|---|
 | ![Small widget](screenshots/small.png) | ![Mini route](screenshots/mini.png) |
-
-## Features
-
-- **Weather as Pokémon.** Live weather from [Open-Meteo](https://open-meteo.com) (free, no API key). Each condition has its own Pokémon: Sunflora for sunny, Swablu for part cloud, Castform for overcast, Gastly for haze, Squirtle for rain, Pikachu for storms, Snorunt for snow, Pidgey for wind.
-- **Month calendar.** Past days show the weather that actually happened, upcoming days show the forecast (up to 14 days ahead). Click a day for details.
-- **Commit streak that evolves.** Reads your GitHub contribution calendar through the GitHub CLI. Your streak evolves Charmander → Charmeleon (7 days) → Charizard (30 days). The green bar under each day is that day's contributions.
-- **System HP.** Free memory as an HP bar (Jigglypuff, Psyduck or Gastly depending on how it's doing), plus CPU, disk and battery.
-- **Walking Pokémon.** Real 8-direction walk cycles: they wander, turn around and pause. Click the Poké Ball to shuffle in new ones from all 386 Gen 1–3 Pokémon. Snorlax naps on the right.
-- **Play with them.** Hover over a Pokémon to see its name and it stops to look at you. Click to pet it: it hops and shows a heart (pet it too much and it gets cross and stomps off). Drag it to pick it up and drop it somewhere else along the route. When two of them cross paths they sometimes stop for a moment: falling in love, hopping together as friends, spinning around for fun, glaring at each other, or having a quick fight. Poke Snorlax and it stirs; poke it a lot and it startles everyone.
-- **A life of their own.** Now and then a Pokémon curls up for a nap (more often late at night; click it to wake it), spins around for fun, or finds a berry or an apple. It might share the snack with a friend, eat it itself, or hold it up and offer it to you: click it to accept the gift.
-- **Feed them.** Click the berry badge by the Poké Ball to toss a berry or apple onto the route, or drag it to exactly where you want it. The nearest Pokémon trots over and eats it.
-- **Evolutions.** Every so often a Pokémon that can evolve does, with the classic white flicker between forms. It's rare, but a Pokémon you've petted, given gifts and fed is much likelier to evolve.
-- **Shinies.** Every Pokémon that arrives has a 1-in-64 chance of being shiny (configurable). Visitors rotate every few minutes, shinies arrive with sparkles, and the menu keeps a log of every shiny you've spotted.
 
 ## Requirements
 
@@ -129,8 +158,8 @@ Your shiny log is saved to `~/Documents/Pokemon Widget/shinies.json`.
 
 | File | What it is |
 |---|---|
-| `main.swift` | The app: desktop-level window, menu bar, weather, GitHub contributions, system vitals, walk-sheet parsing |
-| `widget.html` | The widget UI (all four sizes) and the walking/shiny animation |
+| `main.swift` | The app: desktop-level window, menu bar, weather, GitHub contributions, system vitals, sprite-sheet and evolution data |
+| `widget.html` | The widget UI (all four sizes) and the Pokémon: their animations, behaviour and everything you can do with them |
 | `build.sh` | Compiles, signs and installs the app |
 | `fetch_sprites.sh` | Downloads the sprites |
 
@@ -152,7 +181,8 @@ rm -rf /Applications/"Pokemon Widget.app" ~/Documents/"Pokemon Widget"
 ## Credits
 
 - Animated Black/White sprites from the [PokeAPI sprites](https://github.com/PokeAPI/sprites) repository.
-- Walk-cycle sprite sheets from [PMDCollab SpriteCollab](https://github.com/PMDCollab/SpriteCollab) (CC BY-NC 4.0, by its many contributing artists).
+- Walking, hopping, eating, sleeping and battle sprite sheets from [PMDCollab SpriteCollab](https://github.com/PMDCollab/SpriteCollab) (CC BY-NC 4.0, by its many contributing artists).
+- Evolution data from [PokeAPI](https://pokeapi.co).
 - Weather data by [Open-Meteo](https://open-meteo.com) (CC BY 4.0).
 - Fonts: [Inter](https://rsms.me/inter/) and [Silkscreen](https://fonts.google.com/specimen/Silkscreen) via Google Fonts.
 
